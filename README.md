@@ -40,4 +40,22 @@ Backend Cloud
 │                     │
 │ Aplicación móvil    │
 │ Aplicación web      │
-└─────────────────────┘
+ └─────────────────────┘
+
+## Integración con el backend
+
+Inicia primero el backend en `http://localhost:8000` y después el frontend:
+
+```bash
+npx expo start
+```
+
+La aplicación usa `http://localhost:8000` en web/iOS y `http://10.0.2.2:8000`
+en el emulador Android. Para un teléfono físico configura la IP del equipo:
+
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.1.20:8000 npx expo start
+```
+
+El registro requiere un token de sucursal y deja la cuenta pendiente de
+aprobación, tal como valida el backend.
