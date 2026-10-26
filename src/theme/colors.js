@@ -1,0 +1,1 @@
+export const colors = { bg: '#BDD8E9', navy: '#001D39', blue: '#7BBDE8', text: '#0A4174', muted: '#587991', white: '#F8FCFE', green: '#2CC65B', greenSoft: '#99F0B7', border: '#D3E5F0', dialog: '#49769F' };
