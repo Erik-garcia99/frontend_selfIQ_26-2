@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Frontend-SelfIQ-26_2",
-    "slug": "Frontend-SelfIQ-26_2",
+    "slug": "selfiq",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,10 +15,20 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.dmrx.selfiq"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "54f0b68d-83e0-4dae-aca0-2ef81eb12bd4"
+      }
+    },
+    "owner": "dmrx",
+    "plugins": [
+      "expo-status-bar"
+    ]
   }
 }
