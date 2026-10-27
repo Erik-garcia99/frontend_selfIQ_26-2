@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
-import { Logo, Field, Button, Message } from '../../components/ui';
-import { styles } from '../../theme/styles';
+import { Text, View } from 'react-native';
+import { AuthScreen, TextField, Primary, LinkButton } from '../../components/layout';
+import { Message } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { useAsyncAction } from '../../utils/useAsyncAction';
 import { isEmail } from '../../utils/validation';
+import { layoutStyles as L } from '../../theme/layout';
+
+// Funcionamiento original conservado: valida con isEmail y muestra el mensaje
+// del backend tal cual. Solo cambió la presentación (frames 01 de Figma).
 export default function LoginScreen({ go }) {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
   const { signIn } = useAuth(); const task = useAsyncAction();
@@ -12,13 +16,26 @@ export default function LoginScreen({ go }) {
     if (!isEmail(email) || !password) return task.setError('Escribe tu correo y contraseña.');
     task.run(() => signIn(email.trim().toLowerCase(), password));
   };
-  return <View style={styles.auth}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.authContent}>
-    <Logo /><Text style={styles.welcome}>Bienvenido</Text><View style={styles.authCard}>
-      <Field label="Correo" placeholder="tu@correo.com" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} editable={!task.loading} />
-      <Field label="Contraseña" password placeholder="Tu contraseña" value={password} onChangeText={setPassword} editable={!task.loading} />
-      <Text style={styles.forgot} onPress={() => !task.loading && go('recovery')}>¿Olvidaste tu contraseña?</Text>
-      <Message error={task.error} /><Button onPress={submit} loading={task.loading}>Iniciar sesión</Button>
-      <View style={styles.registerRow}><Text style={styles.mutedText}>¿Aún no tienes cuenta?</Text><Text style={styles.link} onPress={() => !task.loading && go('register')}>Registrarse</Text></View>
-    </View><View style={styles.footer}><Text style={styles.footerTitle}>SelfIQ</Text><Text style={styles.footerText}>Gestión inteligente para tu operación</Text></View>
-  </ScrollView></View>;
+  return <AuthScreen>
+    <View>
+      <Text style={L.authTitle}>Bienvenido</Text>
+      <View style={L.authCard}>
+        <TextField label="Correo / No. de empleado" placeholder="example@example.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
+          value={email} onChangeText={setEmail} editable={!task.loading} />
+        <TextField label="Contraseña" placeholder="••••••••" secureTextEntry autoCapitalize="none"
+          value={password} onChangeText={setPassword} editable={!task.loading} style={{ marginBottom: 4 }} />
+        <Text style={L.authForgot} onPress={() => !task.loading && go('recovery')}>¿Olvidaste tu contraseña?</Text>
+        <Message error={task.error} />
+        <Primary tall loading={task.loading} onPress={submit}>Iniciar sesión</Primary>
+        <View style={L.authRow}>
+          <Text style={L.authMuted}>¿Aún no tienes cuenta?</Text>
+          <LinkButton onPress={() => !task.loading && go('register')}>Registrarse</LinkButton>
+        </View>
+      </View>
+    </View>
+    <View style={L.brand}>
+      <Text style={L.brandTitle}>SelfIQ</Text>
+      <Text style={L.brandText}>Gestión inteligente para tu operación</Text>
+    </View>
+  </AuthScreen>;
 }

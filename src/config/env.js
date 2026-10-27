@@ -2,7 +2,12 @@
 // Aquí va la URL pública del backend FastAPI en Railway.
 const configuredUrl = (process.env.EXPO_PUBLIC_API_URL || '').trim();
 
-export const API_BASE_URL = configuredUrl.replace(/\/+$/, '');
+// Tolera valores sin esquema (p. ej. "mi-backend.up.railway.app"): se asume HTTPS.
+const withScheme = configuredUrl && !/^[a-z][a-z0-9+.-]*:\/\//i.test(configuredUrl)
+  ? `https://${configuredUrl}`
+  : configuredUrl;
+
+export const API_BASE_URL = withScheme.replace(/\/+$/, '');
 
 export function validateApiConfiguration() {
   if (!API_BASE_URL) {

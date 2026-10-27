@@ -7,13 +7,18 @@ import Recovery from '../screens/auth/RecoveryScreen';
 import Home from '../screens/home/HomeScreen';
 import Branch from '../screens/branches/CreateBranchScreen';
 import Settings from '../screens/settings/SettingsScreen';
+import ProfileSettings from '../screens/settings/ProfileSettingsScreen';
+import NotificationsSettings from '../screens/settings/NotificationsSettingsScreen';
+import SecuritySettings from '../screens/settings/SecuritySettingsScreen';
+import Logout from '../screens/settings/LogoutScreen';
 import Panel from '../screens/PanelScreen';
 import Alerts from '../screens/PlaceholderScreen';
 import Tokens from '../screens/admin/TokenScreen';
 import Approve from '../screens/admin/ApproveUserScreen';
 import Gateway from '../screens/gateways/GatewayScreen';
 const publicScreens = { login: Login, register: Register, recovery: Recovery };
-const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: Panel, alerts: Alerts, tokens: Tokens, approve: Approve, gateway: Gateway };
+const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: Panel, alerts: Alerts, tokens: Tokens, approve: Approve, gateway: Gateway,
+  'settings-profile': ProfileSettings, 'settings-notifications': NotificationsSettings, 'settings-security': SecuritySettings, 'settings-logout': Logout };
 function PublicNavigator() {
   const [route, go] = useState('login'); const Screen = publicScreens[route] || Login;
   return <Screen key={route} go={go} />;

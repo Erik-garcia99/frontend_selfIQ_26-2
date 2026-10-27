@@ -1,18 +1,27 @@
 import { Text, View } from 'react-native';
-import { Page, Card, Button, Action, Message } from '../../components/ui';
+import { Screen, Head, Identity, SectionLabel, NavRow } from '../../components/layout';
 import { useAuth } from '../../context/AuthContext';
-import { useAsyncAction } from '../../utils/useAsyncAction';
-import { canManage } from '../../utils/validation';
-import { styles } from '../../theme/styles';
+import { canManage, roleLabel } from '../../utils/validation';
+import { APP_NAME, APP_VERSION } from '../../config/appInfo';
+import { layoutStyles as L } from '../../theme/layout';
+
 export default function SettingsScreen({ go }) {
-  const { user, signOut, refreshUser } = useAuth(); const task = useAsyncAction();
-  return <Page title="Ajustes" go={go} active="settings" busy={task.loading}><Card>
-    <Text style={styles.summaryTitle}>{user?.first_name} {user?.last_name}</Text><Text selectable style={{ marginVertical: 14 }}>{user?.email}</Text>
-    <Text>Rol: {user?.role || (user?.is_superuser ? 'sudo' : 'usuario')}</Text><Text style={{ marginTop: 8 }}>Cuenta: {user?.account_status}</Text>
-    {user?.organization_id && <Text selectable style={{ marginTop: 12 }}>Empresa: {user.organization_id}</Text>}
-    {user?.branch_id && <Text selectable style={{ marginTop: 12 }}>Sucursal: {user.branch_id}</Text>}
-  </Card>{canManage(user) && <Action title="Tokens de acceso" onPress={() => go('tokens')} />}
-    <Message error={task.error} /><Button loading={task.loading} onPress={() => task.run(refreshUser)}>Actualizar mi cuenta</Button>
-    <View style={{ marginTop: 28 }}><Button disabled={task.loading} dark={false} onPress={signOut}>Cerrar sesión</Button></View>
-  </Page>;
+  const { user } = useAuth();
+  const name = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email || 'Mi cuenta';
+  return <Screen go={go} active="settings">
+    <Head big title="Ajustes" subtitle="Preferencias de tu cuenta" />
+    <Identity name={name} detail={`${roleLabel(user)}${user?.email ? ` · ${user.email}` : ''}`} />
+    <SectionLabel>Cuenta y aplicación</SectionLabel>
+    <NavRow label="Datos personales" onPress={() => go('settings-profile')} />
+    <NavRow label="Notificaciones" onPress={() => go('settings-notifications')} />
+    <NavRow label="Seguridad y contraseña" onPress={() => go('settings-security')} />
+    {canManage(user) ? <>
+      <SectionLabel>Administración</SectionLabel>
+      <NavRow label="Tokens de acceso" detail="Generar o reemplazar tokens" onPress={() => go('tokens')} />
+      <NavRow label="Personal y permisos" onPress={() => go('panel')} />
+    </> : null}
+    <View style={{ height: 28 }} />
+    <NavRow label="Cerrar sesión" danger onPress={() => go('settings-logout')} />
+    <Text style={[L.note, { marginTop: 12 }]}>{APP_NAME} · v{APP_VERSION}</Text>
+  </Screen>;
 }

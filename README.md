@@ -59,3 +59,25 @@ EXPO_PUBLIC_API_URL=http://192.168.1.20:8000 npx expo start
 
 El registro requiere un token de sucursal y deja la cuenta pendiente de
 aprobación, tal como valida el backend.
+
+## Temperatura en Inicio
+
+La temperatura se muestra exclusivamente en el recuadro original junto a
+**Aforo actual**, debajo del saludo. No hay una tarjeta adicional de monitoreo.
+Consulta el backend cada 15 s mientras Inicio está activo; el valor es la última
+lectura de la sucursal, no un promedio de sensores.
+
+Colores: **azul por debajo de 15 °C**, **verde desde 15 hasta menos de 35 °C**,
+**rojo desde 35 °C, inclusive** (umbrales visuales confirmados por el usuario;
+F-07 menciona >40 °C para alerta). Los límites están
+en `src/config/temperature.js`. Sin datos, con error o lectura desactualizada,
+el recuadro es neutro para no indicar falsamente una temperatura agradable.
+Al tocar el recuadro puedes consultar la última medición, reintentar o seleccionar
+otra sucursal autorizada, sin alterar el diseño de Inicio.
+
+Pruebas de presentación y límites: `node --test tests/temperature.test.mjs`.
+
+Configura `EXPO_PUBLIC_API_URL` en el `.env` del frontend con la URL de Railway
+y reinicia Expo después de cambiarla. No pongas tokens de InfluxDB en este
+repositorio ni en variables `EXPO_PUBLIC_*`.
+La configuración privada se realiza en el backend; consulta su `TELEMETRIA.md`.
