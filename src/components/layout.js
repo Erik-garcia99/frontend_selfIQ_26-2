@@ -67,9 +67,9 @@ export function FieldCard({ label, value, onChangeText, placeholder, editable = 
   </View>;
 }
 
-export function ToggleRow({ label, value, onValueChange }) {
-  return <View style={L.switchRow}><Text style={L.switchLabel}>{label}</Text>
-    <Switch accessibilityLabel={label} value={value} onValueChange={onValueChange} trackColor={{ false: C.border, true: C.navy }} thumbColor={C.field} ios_backgroundColor={C.border} /></View>;
+export function ToggleRow({ label, value, onValueChange, disabled = false }) {
+  return <View style={[L.switchRow, disabled && { opacity: .55 }]}><Text style={L.switchLabel}>{label}</Text>
+    <Switch accessibilityLabel={label} value={value} onValueChange={onValueChange} disabled={disabled} trackColor={{ false: C.border, true: C.navy }} thumbColor={C.field} ios_backgroundColor={C.border} /></View>;
 }
 
 export function Primary({ children, onPress, loading = false, disabled = false, variant = 'dark', tall = false, loadingLabel = 'Procesando…' }) {
