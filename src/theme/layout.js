@@ -59,6 +59,7 @@ export const layoutStyles = StyleSheet.create({
   primary: { height: 52, borderRadius: 16, backgroundColor: C.navy, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   primaryTall: { height: 54, borderRadius: 17 },
   primaryText: { color: C.white, fontSize: 15, fontWeight: '600' },
+  dangerButton: { height: 52, borderRadius: 16, backgroundColor: C.danger, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   secondary: { height: 52, borderRadius: 16, backgroundColor: C.white, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   secondaryText: { color: C.ink, fontSize: 14, fontWeight: '600' },
 

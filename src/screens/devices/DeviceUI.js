@@ -41,7 +41,8 @@ export function useSave(go) {
   async function save(operation, payload, destination) {
     if (busy) return; setBusy(true); setError('');
     try { const result = await d.mutate(operation, payload); if (!result?.id) throw new Error('missing confirmation');
-      d.setResult(result); go(destination);
+       if (operation === 'updateDevice') d.selectDevice(result);
+       d.setResult(result); go(destination);
     } catch { setError('No pudimos confirmar los cambios. Revisa la información guardada antes de intentarlo de nuevo.'); }
     finally { setBusy(false); }
   }

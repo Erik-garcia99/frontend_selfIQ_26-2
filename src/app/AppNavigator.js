@@ -35,6 +35,9 @@ import ConfirmError from '../screens/devices/ConfirmErrorScreen';
 import AforoDetail from '../screens/devices/AforoDetailScreen';
 import EditAforo from '../screens/devices/EditAforoScreen';
 import AforoUpdated from '../screens/devices/AforoUpdatedScreen';
+import EditDevice from '../screens/devices/EditDeviceScreen';
+import DeviceUpdated from '../screens/devices/DeviceUpdatedScreen';
+import DeleteDevice from '../screens/devices/DeleteDeviceScreen';
 import EditLight from '../screens/devices/EditLightScreen';
 import SelectShelf from '../screens/devices/SelectShelfScreen';
 import AddLight from '../screens/devices/AddLightScreen';
@@ -48,9 +51,10 @@ const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: 
   'preparing-search': PreparingSearch, searching: Searching, 'device-found': DeviceFound, 'add-camera': AddCamera,
   'adding-device': AddingDevice, 'device-added': DeviceAdded, 'no-results': NoResults, 'search-error': SearchError,
   'confirm-error': ConfirmError, 'aforo-detail': AforoDetail, 'edit-aforo': EditAforo, 'aforo-updated': AforoUpdated,
+  'edit-device': EditDevice, 'device-updated': DeviceUpdated, 'delete-device': DeleteDevice,
   'edit-light': EditLight, 'select-shelf': SelectShelf, 'add-light': AddLight, 'test-light': TestLight,
   'light-updated': LightUpdated, 'light-added': LightAdded };
-const deviceRoutes = new Set(['gateway', 'devices', 'add-device', 'registered-devices', 'guide', 'preparing-search', 'searching', 'device-found', 'add-camera', 'adding-device', 'device-added', 'no-results', 'search-error', 'confirm-error', 'confirm-device', 'camera-detail', 'aforo-detail', 'edit-aforo', 'aforo-updated', 'edit-light', 'select-shelf', 'add-light', 'test-light', 'light-updated', 'light-added']);
+const deviceRoutes = new Set(['gateway', 'devices', 'add-device', 'registered-devices', 'guide', 'preparing-search', 'searching', 'device-found', 'add-camera', 'adding-device', 'device-added', 'no-results', 'search-error', 'confirm-error', 'confirm-device', 'camera-detail', 'aforo-detail', 'edit-aforo', 'aforo-updated', 'edit-device', 'device-updated', 'delete-device', 'edit-light', 'select-shelf', 'add-light', 'test-light', 'light-updated', 'light-added']);
 function PublicNavigator() {
   const [route, go] = useState('login'); const Screen = publicScreens[route] || Login;
   return <Screen key={route} go={go} />;

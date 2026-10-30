@@ -19,7 +19,7 @@ export async function deviceRequest(operation, context, payload = {}) {
   return result;
 }
 export function deviceLabel(device) {
-  return device?.name || ({ guide: 'Guía de luces', occupancy: 'Control de aforo', camera: 'Cámara' }[device?.type]) || 'Dispositivo';
+  return device?.name || ({ guide: 'Guía de luces', occupancy: 'Control de aforo', camera: 'Cámara', environment: 'Sensor ambiental' }[device?.type]) || 'Dispositivo';
 }
 export function statusLabel(device) {
   return device?.online === true ? 'Conectado' : device?.online === false ? 'Sin conexión' : 'Sin información de conexión';

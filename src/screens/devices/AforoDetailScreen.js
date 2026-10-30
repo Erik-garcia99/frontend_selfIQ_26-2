@@ -10,5 +10,6 @@ const d = useDevices(); const state = useData('getDevice', { deviceId: d.device?
  <Copy>{reading?.humidity != null ? `Humedad: ${reading.humidity} %` : 'Humedad: sin lectura'}</Copy>
  <Copy>{reading?.measuredAt ? `Medido: ${new Date(reading.measuredAt).toLocaleString()}` : 'Sin fecha de medición'}</Copy></Info>
  <FieldCard label="Nombre" value={device?.name} /><FieldCard label="Ubicación" value={device?.location} />
- <Primary disabled={!device?.id} onPress={() => { d.selectDevice(device); go('edit-aforo'); }}>Editar datos</Primary></LoadState></Shell>;
+ <Primary disabled={!device?.id} onPress={() => { d.selectDevice(device); go('edit-aforo'); }}>Editar datos</Primary>
+ <Primary variant="danger" disabled={!device?.id} onPress={() => { d.selectDevice(device); go('delete-device'); }}>Eliminar dispositivo</Primary></LoadState></Shell>;
 }

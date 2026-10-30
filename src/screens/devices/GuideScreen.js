@@ -8,5 +8,7 @@ const d = useDevices(); const state = useData('getGuide', { deviceId: d.device?.
  {!lights.length && <Info>Agrega una luz y elige el estante que señalará.</Info>}
  <Primary disabled={lights.length >= LIGHT_LIMIT} onPress={() => { d.setDraft({ name: '', shelfId: null, channel: null, mode: 'add' }); go('add-light'); }}>+ Agregar luz</Primary>
  <Copy>{lights.length >= LIGHT_LIMIT ? 'Llegaste al límite de 10 luces de esta guía.' : 'Cada luz puede señalar un estante diferente.'}</Copy>
+ <Primary variant="light" disabled={!guide?.id} onPress={() => { d.selectDevice(guide); go('edit-device'); }}>Editar datos</Primary>
+ <Primary variant="danger" disabled={!guide?.id} onPress={() => { d.selectDevice(guide); go('delete-device'); }}>Eliminar dispositivo</Primary>
  </LoadState></Shell>;
 }
