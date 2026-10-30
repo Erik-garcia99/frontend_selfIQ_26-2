@@ -4,3 +4,6 @@ export const getTelemetryBranches = (accessToken) => apiRequest('/telemetry/bran
 export const getLatestTemperature = (branchId, accessToken) => apiRequest(
   `/branches/${encodeURIComponent(branchId)}/telemetry/temperature/latest`, { accessToken },
 );
+export const getLatestOccupancy = (branchId, accessToken) => apiRequest(
+  `/branches/${encodeURIComponent(branchId)}/telemetry/occupancy/latest`, { accessToken },
+);
