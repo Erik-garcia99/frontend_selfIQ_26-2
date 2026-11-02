@@ -21,8 +21,14 @@ function normalizeDevice(value = {}) {
     online: typeof value.online === 'boolean' ? value.online : null,
     lastSeenAt: value.lastSeenAt ?? null,
     displayCode: value.displayCode ?? undefined,
+    macAddress: value.macAddress ?? null,
+    nodeCode: value.nodeCode ?? null,
     gatewayId: value.gatewayId ?? null,
   };
+}
+
+function normalizeGateway(value) {
+  return { id: value.gateway_id, name: value.name || 'Gateway', online: value.connected === true };
 }
 
 function normalizeLight(value = {}) {
@@ -45,11 +51,17 @@ export const deviceAdapter = {
     const rows = await apiRequest('/gateways', { accessToken });
     return list(rows)
       .filter((gateway) => String(gateway.branch_id) === String(branchId))
-      .map((gateway) => ({
-        id: gateway.gateway_id,
-        name: gateway.name || gateway.gateway_id,
-        online: gateway.connected === true,
-      }));
+      .map(normalizeGateway);
+  },
+
+  async getGateway({ gatewayId, accessToken }) {
+    return confirmed(normalizeGateway(await apiRequest(`/gateways/${encodeURIComponent(gatewayId)}`, { accessToken })), 'No se pudo consultar el gateway.');
+  },
+
+  async updateGateway({ gatewayId, name, accessToken }) {
+    return confirmed(normalizeGateway(await apiRequest(`/gateways/${encodeURIComponent(gatewayId)}`, {
+      method: 'PATCH', accessToken, body: { name },
+    })), 'No se pudo confirmar el nombre del gateway.');
   },
 
   async startDiscovery({ branchId, gatewayId, accessToken }) {
@@ -90,8 +102,9 @@ export const deviceAdapter = {
     return confirmed(normalizeDevice(result), 'El registro del dispositivo no fue confirmado.');
   },
 
-  async listDevices({ branchId, accessToken }) {
-    const rows = await apiRequest(`${branchPath(branchId)}/devices`, { accessToken });
+  async listDevices({ branchId, gatewayId, accessToken }) {
+    const query = gatewayId ? `?gateway_id=${encodeURIComponent(gatewayId)}` : '';
+    const rows = await apiRequest(`${branchPath(branchId)}/devices${query}`, { accessToken });
     return list(rows).map(normalizeDevice);
   },
 
@@ -112,10 +125,12 @@ export const deviceAdapter = {
     return confirmed(normalizeDevice(result), 'Los cambios no fueron confirmados.');
   },
 
-  async deleteDevice({ branchId, deviceId, accessToken }) {
-    const result = await apiRequest(devicePath(branchId, deviceId), {
+  async deleteDevice({ branchId, deviceId, force, accessToken }) {
+    const query = force ? '?force=true' : '';
+    const result = await apiRequest(`${devicePath(branchId, deviceId)}${query}`, {
       method: 'DELETE',
       accessToken,
+      timeout: 70000,
     });
     return confirmed(result, 'La eliminación no fue confirmada.', (value) => value.deleted === true);
   },
@@ -169,7 +184,7 @@ export const deviceAdapter = {
       timeout: 70000,
       body: { channel, duration_seconds: durationSeconds },
     });
-    if (result?.confirmed !== true) throw new ApiError('La Raspberry no confirmó la prueba.', 502);
+    if (result?.confirmed !== true) throw new ApiError('El gateway no confirmó la prueba.', 502);
     return { confirmed: true, channel: result.channel ?? channel };
   },
 };

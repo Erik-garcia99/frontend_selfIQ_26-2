@@ -26,9 +26,9 @@ export function useData(operation, payload = {}) {
   }
   useEffect(() => { let active = true;
     request(operation, JSON.parse(key)).then(data => { if (active) setState({ loading: false, data, error: '' }); })
-      .catch(error => { if (active) setState({ loading: false, data: null, error: error.code === 'NOT_AVAILABLE' ? 'Esta función todavía no está disponible. Inténtalo más tarde.' : 'No se pudo cargar la información. Comprueba tu conexión y que tengas una sucursal asignada.' }); });
+      .catch(error => { if (active) setState({ loading: false, data: null, error: error.message || 'No se pudo cargar la información.' }); });
     return () => { active = false; };
-  }, [operation, key, version]);
+  }, [operation, key, version, request]);
   return { ...state, reload: () => setVersion(v => v + 1) };
 }
 export function LoadState({ state, children }) {

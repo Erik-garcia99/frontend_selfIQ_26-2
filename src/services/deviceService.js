@@ -12,7 +12,7 @@ export async function deviceRequest(operation, context, payload = {}) {
   if (['listGateways', 'listDevices', 'listShelves', 'listLightChannels'].includes(operation)) {
     if (!Array.isArray(result) || result.some(item => item?.id == null)) throw new Error('Invalid list response');
   }
-  if (['getGuide', 'getDevice', 'registerDevice', 'updateDevice', 'addLight', 'updateLight', 'startDiscovery'].includes(operation) && result?.id == null) {
+  if (['getGateway', 'updateGateway', 'getGuide', 'getDevice', 'registerDevice', 'updateDevice', 'addLight', 'updateLight', 'startDiscovery'].includes(operation) && result?.id == null) {
     throw new Error('Missing confirmed identifier');
   }
   if (operation === 'getGuide' && !Array.isArray(result.lights)) throw new Error('Invalid lights response');
