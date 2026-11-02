@@ -74,8 +74,9 @@ export function ToggleRow({ label, value, onValueChange, disabled = false }) {
 
 export function Primary({ children, onPress, loading = false, disabled = false, variant = 'dark', tall = false, loadingLabel = 'Procesando…' }) {
   const off = disabled || loading;
+  const skin = variant === 'light' ? L.secondary : variant === 'danger' ? L.dangerButton : L.primary;
   return <Pressable accessibilityRole="button" accessibilityState={{ disabled: off, busy: loading }} disabled={off} onPress={onPress}
-    style={({ pressed }) => [variant === 'light' ? L.secondary : L.primary, tall && L.primaryTall, off && { opacity: .55 }, pressed && { opacity: .8 }]}>
+    style={({ pressed }) => [skin, tall && L.primaryTall, off && { opacity: .55 }, pressed && { opacity: .8 }]}>
     <Text style={variant === 'light' ? L.secondaryText : L.primaryText}>{loading ? loadingLabel : children}</Text></Pressable>;
 }
 

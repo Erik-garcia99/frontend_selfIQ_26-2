@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const source = fs.readFileSync(new URL('../src/services/deviceService.js', import.meta.url), 'utf8');
+const service = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+await assert.rejects(service.deviceRequest('listGateways', {}), /sucursal/);
+await assert.rejects(service.deviceRequest('listGateways', { branchId: 'branch' }), /todavía/);
+let request;
+service.configureDeviceAdapter({ listGateways: async value => { request = value; return []; } });
+assert.deepEqual(await service.deviceRequest('listGateways', { branchId: 'branch', accessToken: 'token' }), []);
+assert.equal(request.branchId, 'branch');
+assert.equal(request.accessToken, 'token');
+assert.equal(service.validLight({ name: ' ', shelfId: 'shelf', channel: 0 }), false);
+assert.equal(service.validLight({ name: 'Luz', shelfId: 'shelf', channel: 0 }), true);
+assert.equal(service.validLight({ name: 'Luz', shelfId: 'shelf' }), false);
+assert.equal(service.statusLabel({}), 'Sin información de conexión');
+assert.equal(service.LIGHT_LIMIT, 10);
+console.log('PASS: adapter scope, unavailable operations, empty real data, channel zero, validation and unknown status.');
