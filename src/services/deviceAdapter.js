@@ -1,7 +1,7 @@
 // Adaptador real del contrato src/services/deviceService.js.
 // Traduce las operaciones del panel a los endpoints de backend/app/devices.py
 // y normaliza las respuestas. Nunca inventa confirmaciones.
-import { apiRequest, ApiError } from './http';
+import { apiRequest, ApiError, API_BASE_URL } from './http';
 
 const branchPath = (branchId) => `/branches/${encodeURIComponent(branchId)}`;
 const devicePath = (branchId, deviceId) =>
@@ -114,6 +114,36 @@ export const deviceAdapter = {
       ...normalizeDevice(result),
       readings: result.readings ?? undefined,
     }, 'No se pudo consultar el dispositivo.');
+  },
+
+  async getDeviceHealth({ branchId, deviceId, accessToken }) {
+    return apiRequest(`${devicePath(branchId, deviceId)}/health`, { accessToken });
+  },
+
+  async requestSnapshot({ branchId, deviceId, accessToken }) {
+    return apiRequest(`${devicePath(branchId, deviceId)}/snapshot/request`, {
+      method: 'POST',
+      accessToken,
+      timeout: 20000,
+    });
+  },
+
+  async fetchSnapshot({ branchId, deviceId, accessToken }) {
+    const response = await fetch(`${API_BASE_URL}${devicePath(branchId, deviceId)}/snapshot`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      throw new ApiError('No se pudo obtener la foto.', response.status);
+    }
+    const capturedAt = response.headers.get('X-Captured-At');
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    return { uri: `data:image/jpeg;base64,${base64}`, capturedAt };
   },
 
   async updateDevice({ branchId, deviceId, name, location, accessToken }) {
