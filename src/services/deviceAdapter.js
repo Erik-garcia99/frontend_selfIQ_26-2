@@ -24,6 +24,22 @@ function normalizeDevice(value = {}) {
     macAddress: value.macAddress ?? null,
     nodeCode: value.nodeCode ?? null,
     gatewayId: value.gatewayId ?? null,
+    gatewayName: value.gatewayName ?? null,
+    firmwareVersion: value.firmwareVersion ?? null,
+    ipAddress: value.ipAddress ?? null,
+    wifiRssi: typeof value.wifiRssi === 'number' ? value.wifiRssi : null,
+    batteryLevelPct: typeof value.batteryLevelPct === 'number' ? value.batteryLevelPct : null,
+    powerSource: value.powerSource ?? null,
+    registeredAt: value.registeredAt ?? null,
+  };
+}
+
+function normalizeProduct(value = {}) {
+  return {
+    id: value.id,
+    sku: value.sku ?? '',
+    name: value.name ?? '',
+    active: value.active !== false,
   };
 }
 
@@ -44,6 +60,34 @@ function normalizeLight(value = {}) {
 function confirmed(result, message, check = () => true) {
   if (!result || !result.id || !check(result)) throw new ApiError(message, 502);
   return result;
+}
+
+// El backend entrega `X-Captured-At` como "YYYY-MM-DD HH:MM:SS.ffffff+00:00".
+// Ese formato no es ISO 8601 y Hermes puede devolver Invalid Date, así que se
+// normaliza antes de mostrarlo o compararlo.
+function snapshotTimestamp(value) {
+  if (!value) return null;
+  const match = String(value).trim().match(
+    /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\.(\d+))?\s*(Z|[+-]\d{2}:?\d{2})?$/,
+  );
+  if (!match) return String(value);
+  const [, date, time, fraction, zone = 'Z'] = match;
+  const millis = (fraction || '').padEnd(3, '0').slice(0, 3);
+  const offset = zone === 'Z' || zone.includes(':')
+    ? zone
+    : `${zone.slice(0, 3)}:${zone.slice(3)}`;
+  return `${date}T${time}.${millis}${offset}`;
+}
+
+// Huella barata del JPEG. Sirve para detectar una foto nueva sin depender de la
+// cabecera de fecha (que puede faltar o no ser parseable en el cliente).
+function snapshotFingerprint(bytes) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < bytes.length; index += 1) {
+    hash ^= bytes[index];
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${bytes.length}-${hash.toString(16)}`;
 }
 
 export const deviceAdapter = {
@@ -135,7 +179,7 @@ export const deviceAdapter = {
     if (!response.ok) {
       throw new ApiError('No se pudo obtener la foto.', response.status);
     }
-    const capturedAt = response.headers.get('X-Captured-At');
+    const capturedAt = snapshotTimestamp(response.headers.get('X-Captured-At'));
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
@@ -143,7 +187,11 @@ export const deviceAdapter = {
       binary += String.fromCharCode(bytes[i]);
     }
     const base64 = btoa(binary);
-    return { uri: `data:image/jpeg;base64,${base64}`, capturedAt };
+    return {
+      uri: `data:image/jpeg;base64,${base64}`,
+      capturedAt,
+      fingerprint: snapshotFingerprint(bytes),
+    };
   },
 
   async updateDevice({ branchId, deviceId, name, location, accessToken }) {
@@ -163,6 +211,52 @@ export const deviceAdapter = {
       timeout: 70000,
     });
     return confirmed(result, 'La eliminación no fue confirmada.', (value) => value.deleted === true);
+  },
+
+  async getDeviceShelf({ branchId, deviceId, accessToken }) {
+    const result = await apiRequest(`${devicePath(branchId, deviceId)}/shelf`, { accessToken });
+    if (result == null) return null;
+    if (result.shelf === undefined) return result;
+    return result.shelf ?? null;
+  },
+
+  async linkShelf({ branchId, deviceId, shelfId, accessToken }) {
+    const result = await apiRequest(`${devicePath(branchId, deviceId)}/shelf`, {
+      method: 'PUT',
+      accessToken,
+      body: { shelf_id: shelfId },
+    });
+    return result?.shelf ?? result;
+  },
+
+  async createShelf({ branchId, deviceId, name, location, accessToken }) {
+    const result = await apiRequest(`${devicePath(branchId, deviceId)}/shelf`, {
+      method: 'POST',
+      accessToken,
+      body: { name, location_label: location ?? null },
+    });
+    return result?.shelf ?? result;
+  },
+
+  async listRois({ branchId, shelfId, accessToken }) {
+    return apiRequest(`${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/rois`, { accessToken });
+  },
+
+  async saveRois({ branchId, shelfId, baseVersion, rois, accessToken }) {
+    return apiRequest(`${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/rois`, {
+      method: 'PUT',
+      accessToken,
+      body: { base_version: baseVersion, rois },
+    });
+  },
+
+  async applyRois({ branchId, shelfId, version, accessToken }) {
+    return apiRequest(`${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/rois/apply`, {
+      method: 'POST',
+      accessToken,
+      body: { version },
+      timeout: 20000,
+    });
   },
 
   async getGuide({ branchId, deviceId, accessToken }) {
@@ -189,6 +283,30 @@ export const deviceAdapter = {
       name: shelf.name,
       location: shelf.location ?? null,
     }));
+  },
+
+  async listProducts({ branchId, accessToken }) {
+    const rows = await apiRequest(`${branchPath(branchId)}/products?limit=100`, { accessToken });
+    return list(rows).map(normalizeProduct);
+  },
+
+  async createProduct({ branchId, sku, name, accessToken }) {
+    const result = await apiRequest(`${branchPath(branchId)}/products`, {
+      method: 'POST',
+      accessToken,
+      body: { sku, name },
+    });
+    return confirmed(normalizeProduct(result), 'El producto no fue confirmado.');
+  },
+
+  async getGatewayStatus({ gatewayId, accessToken }) {
+    const result = await apiRequest(`/gateways/${encodeURIComponent(gatewayId)}/commands`, {
+      method: 'POST',
+      accessToken,
+      timeout: 70000,
+      body: { command: 'status' },
+    });
+    return result;
   },
 
   async addLight({ branchId, deviceId, name, shelfId, channel, accessToken }) {

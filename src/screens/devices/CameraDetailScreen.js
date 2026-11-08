@@ -57,15 +57,31 @@ function CameraDetail({ go, d, accessToken }) {
     const params = { branchId, deviceId, accessToken };
     try {
       await deviceAdapter.requestSnapshot(params);
-      // La confirmación del comando precede al almacenamiento de la imagen.
-      await new Promise(resolve => setTimeout(resolve, 8000));
-      if (!active.current) return;
-      const next = await deviceAdapter.fetchSnapshot(params);
-      if (!active.current) return;
-      if (!next.capturedAt || (snapshot?.capturedAt && new Date(next.capturedAt) <= new Date(snapshot.capturedAt))) {
-        setSnapshotError('La foto nueva todavía no está disponible. Espera un momento y vuelve a intentarlo.');
-      } else {
-        setSnapshot(next);
+      // La confirmación solo indica que la RPi recibió la orden. La imagen
+      // tarda en subir, así que consultamos hasta que el contenido cambie.
+      // Comparamos la huella del JPEG, no la fecha: la cabecera puede faltar
+      // o no ser parseable y dejaba la pantalla cargando para siempre.
+      const deadline = Date.now() + 40000;
+      while (active.current && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        if (!active.current) return;
+        let next;
+        try {
+          next = await deviceAdapter.fetchSnapshot(params);
+        } catch (failure) {
+          if (failure.status === 404) continue;
+          throw failure;
+        }
+        if (!active.current) return;
+        const sameFingerprint = Boolean(next.fingerprint) && next.fingerprint === (snapshot?.fingerprint || '');
+        const sameTimestamp = Boolean(next.capturedAt) && next.capturedAt === (snapshot?.capturedAt || '');
+        if (!sameFingerprint || !sameTimestamp) {
+          setSnapshot(next);
+          return;
+        }
+      }
+      if (active.current) {
+        setSnapshotError('La cámara todavía no ha enviado la foto nueva. Suele tardar unos segundos: vuelve a entrar a la cámara o pulsa “Reintentar foto”.');
       }
     } catch {
       if (active.current) setSnapshotError('No pudimos obtener una foto nueva. Comprueba que la cámara esté encendida y conectada a la red, e inténtalo de nuevo.');
@@ -94,7 +110,7 @@ function CameraDetail({ go, d, accessToken }) {
       <Text accessibilityRole="header" style={styles.heading}>Vista de la repisa</Text>
       <Text style={styles.copy}>Toma una foto para comprobar qué está viendo la cámara.</Text>
       <View style={styles.preview}>
-        {snapshot ? <Image source={{ uri: snapshot.uri }} accessibilityLabel="Última foto capturada por la cámara de la repisa" style={styles.image}
+        {snapshot ? <Image key={snapshot.fingerprint || 'snapshot'} source={{ uri: snapshot.uri }} accessibilityLabel="Última foto capturada por la cámara de la repisa" style={styles.image}
           onError={() => setSnapshotError('No pudimos mostrar esta foto. Intenta tomar una nueva.')} />
           : <View style={styles.empty}>
             {initialLoading ? <ActivityIndicator color={C.navy} /> : null}
@@ -115,6 +131,8 @@ function CameraDetail({ go, d, accessToken }) {
     </View>
 
     <NavRow label="Nombre y ubicación" detail="Cambiar los datos de esta cámara" onPress={() => { d.selectDevice(device); go('edit-device'); }} />
+    <NavRow label="Diagnóstico técnico" detail="Estado del micro, RPi y logs de inspección" onPress={() => { d.selectDevice(device); go('device-diagnostics'); }} />
+    <NavRow label="Zonas de la repisa" detail="Dibuja zonas y asígnalas a un producto" onPress={() => { d.selectDevice(device); go('shelf-zones'); }} />
     <NavRow label="Eliminar cámara" danger onPress={() => { d.selectDevice(device); go('delete-device'); }} />
   </Shell>;
 }

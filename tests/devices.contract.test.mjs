@@ -14,4 +14,14 @@ assert.equal(service.validLight({ name: 'Luz', shelfId: 'shelf', channel: 0 }), 
 assert.equal(service.validLight({ name: 'Luz', shelfId: 'shelf' }), false);
 assert.equal(service.statusLabel({}), 'Sin información de conexión');
 assert.equal(service.LIGHT_LIMIT, 10);
-console.log('PASS: adapter scope, unavailable operations, empty real data, channel zero, validation and unknown status.');
+service.configureDeviceAdapter({
+  listProducts: async () => [{ id: 'p1', sku: 'SKU-1', name: 'Agua' }],
+  createProduct: async () => ({ id: 'p2', sku: 'SKU-2', name: 'Pan' }),
+});
+assert.equal((await service.deviceRequest('listProducts', { branchId: 'branch' }))[0].sku, 'SKU-1');
+assert.equal((await service.deviceRequest('createProduct', { branchId: 'branch' }, { sku: 'SKU-2', name: 'Pan' })).id, 'p2');
+service.configureDeviceAdapter({ listProducts: async () => [{ sku: 'sin-id' }] });
+await assert.rejects(service.deviceRequest('listProducts', { branchId: 'branch' }), /Invalid list response/);
+service.configureDeviceAdapter({ createProduct: async () => ({ sku: 'sin-id' }) });
+await assert.rejects(service.deviceRequest('createProduct', { branchId: 'branch' }), /Missing confirmed identifier/);
+console.log('PASS: adapter scope, unavailable operations, empty real data, channel zero, validation, products and unknown status.');

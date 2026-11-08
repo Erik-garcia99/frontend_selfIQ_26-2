@@ -4,16 +4,18 @@ import { Page, Card, Field, Button, Message, TokenModal } from '../../components
 import { FeedbackDialog } from '../../components/FeedbackDialog';
 import { issueBusinessToken, issueBranchToken } from '../../services/branchService';
 import { useAuth } from '../../context/AuthContext';
+import { useDevices } from '../../context/DeviceContext';
 import { useAsyncAction } from '../../utils/useAsyncAction';
 import { describeError } from '../../utils/errorMessages';
 import { isSuperuser, isUuid } from '../../utils/validation';
 
 export default function TokenScreen({ go }) {
-  const { user, accessToken } = useAuth(); const [mode, setMode] = useState('branch');
-  const [id, setId] = useState(user?.branch_id || ''); const [confirmed, setConfirmed] = useState(false);
+  const { user, accessToken } = useAuth();
+  const { branchId } = useDevices(); const [mode, setMode] = useState('branch');
+  const [id, setId] = useState(branchId || user?.branch_id || ''); const [confirmed, setConfirmed] = useState(false);
   const [issued, setIssued] = useState(null); const [feedback, setFeedback] = useState(null);
   const task = useAsyncAction();
-  const changeMode = (next) => { setMode(next); setId(next === 'branch' ? user?.branch_id || '' : user?.organization_id || ''); setConfirmed(false); task.setError(''); };
+  const changeMode = (next) => { setMode(next); setId(next === 'branch' ? branchId || user?.branch_id || '' : user?.organization_id || ''); setConfirmed(false); task.setError(''); };
   const submit = async () => {
     if (!isUuid(id)) return task.setError('Escribe un ID válido.');
     if (!confirmed) { setConfirmed(true); return; }
