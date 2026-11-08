@@ -69,6 +69,7 @@ export default function ShelfZonesScreen({ go }) {
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
   const [saved, setSaved] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
   const draftRef = useRef(null);   // { startX, startY, id } mientras se dibuja
@@ -95,6 +96,7 @@ export default function ShelfZonesScreen({ go }) {
       setProducts(productList || []);
       setZones((roiData?.rois || []).map((roi) => ({
         id: roi.id,
+        fromDb: true,
         productId: roi.productId ?? roi.product_id ?? null,
         name: roi.name || '',
         x: Number(roi.x ?? roi.bboxX ?? 0),
@@ -219,14 +221,13 @@ export default function ShelfZonesScreen({ go }) {
 
   const validationError = validateZones(zones);
 
-  async function saveAndApply() {
-    if (!shelf || validationError || saving || applying || zones.length === 0) return;
+  async function doSaveAndApply() {
     setSaving(true);
     setError('');
     setSaved('');
     try {
       const payload = zones.map((zone, index) => ({
-        id: zone.id,
+        id: zone.fromDb ? zone.id : null,
         product_id: zone.productId,
         name: zone.name || `Zona ${index + 1}`,
         x: zone.x,
@@ -239,6 +240,18 @@ export default function ShelfZonesScreen({ go }) {
         branchId, shelfId: shelf.id, baseVersion, rois: payload,
       });
       const version = result?.version ?? baseVersion + 1;
+      if (Array.isArray(result?.rois) && result.rois.length === zones.length) {
+        setZones(result.rois.map((roi) => ({
+          id: roi.id,
+          fromDb: true,
+          productId: roi.product_id ?? roi.productId ?? null,
+          name: roi.name || '',
+          x: Number(roi.x),
+          y: Number(roi.y),
+          w: Number(roi.w),
+          h: Number(roi.h),
+        })));
+      }
       setBaseVersion(version);
       setApplying(true);
       setSaving(false);
@@ -253,6 +266,20 @@ export default function ShelfZonesScreen({ go }) {
     }
   }
 
+  async function saveAndApply() {
+    if (!shelf || validationError || saving || applying) return;
+    if (zones.length === 0) {
+      setConfirmDelete(true);
+      return;
+    }
+    await doSaveAndApply();
+  }
+
+  function confirmDeleteZones() {
+    setConfirmDelete(false);
+    doSaveAndApply();
+  }
+
   if (!deviceId || !branchId) return <Shell go={go} title="Zonas de la repisa" back="camera-detail">
     <Info title="Selecciona una cámara">Vuelve a tus dispositivos y elige la cámara que quieres configurar.</Info>
   </Shell>;
@@ -262,7 +289,9 @@ export default function ShelfZonesScreen({ go }) {
   </Shell>;
 
   if (!shelf) return <Shell go={go} title="Zonas de la repisa" back="camera-detail">
-    <Info title="Esta cámara no tiene repisa asignada">Crea o vincula una repisa antes de dibujar zonas.</Info>
+    <Info title="Esta cámara no tiene repisa asignada">
+      Una cámara controla una repisa. Crea la repisa para esta cámara y después dibuja las zonas.
+    </Info>
     <Primary onPress={async () => {
       try {
         const created = await deviceAdapter.createShelf({ branchId, deviceId, name: 'Repisa principal', accessToken });
@@ -280,7 +309,7 @@ export default function ShelfZonesScreen({ go }) {
 
   const selectedZone = zones.find((zone) => zone.id === selected) || null;
 
-  return <Shell go={go} title="Zonas de la repisa" subtitle={device?.name || ''} back="camera-detail" busy={saving || applying}>
+  return <Shell go={go} title="Zonas de la repisa" subtitle={`${device?.name || ''}${shelf?.name ? ' · ' + shelf.name : ''}`} back="camera-detail" busy={saving || applying}>
     <ErrorNotice message={error} />
     {saved ? <Info title="Listo">{saved}</Info> : null}
     <View style={styles.preview} onLayout={(event) => {
@@ -317,7 +346,9 @@ export default function ShelfZonesScreen({ go }) {
         ))}
       </View>
     </View>
-    <Text style={styles.hint}>Dibuja un rectángulo sobre la foto tocando un espacio vacío. Toca una zona para seleccionarla y arrástrala para moverla. Usa la esquina inferior derecha para redimensionar. Máximo {MAX_ZONES} zonas.</Text>
+    <Text style={styles.hint}>
+      Pasos: 1) Dibuja un rectángulo tocando un espacio vacío. 2) Toca la zona y elige un producto. 3) Arrastra para mover, usa la esquina azul para redimensionar. 4) “Guardar y aplicar”. Máximo {MAX_ZONES} zonas.
+    </Text>
 
     {selectedZone && (
       <View style={styles.panel}>
@@ -336,8 +367,8 @@ export default function ShelfZonesScreen({ go }) {
       </View>
     )}
 
-    <Primary onPress={saveAndApply} loading={saving || applying} loadingLabel={saving ? 'Guardando…' : 'Enviando a la cámara…'} disabled={!!validationError || zones.length === 0}>
-      Guardar y aplicar
+    <Primary onPress={saveAndApply} loading={saving || applying} loadingLabel={saving ? 'Guardando…' : 'Enviando a la cámara…'} disabled={!!validationError}>
+      {zones.length === 0 ? 'Borrar todas las zonas' : 'Guardar y aplicar'}
     </Primary>
     {validationError ? <ErrorNotice message={validationError} /> : null}
 
@@ -346,7 +377,14 @@ export default function ShelfZonesScreen({ go }) {
         <View style={styles.modalCard}>
           <Text style={styles.modalTitle}>Elegir producto</Text>
           <ScrollView style={{ maxHeight: 260 }}>
-            {products.length === 0 && <Text style={styles.muted}>No hay productos. Créelos desde “Productos”.</Text>}
+            {products.length === 0 && (
+              <View style={{ gap: 8, paddingVertical: 8 }}>
+                <Text style={styles.muted}>No hay productos. Créelos desde “Productos” en el panel.</Text>
+                <TouchableOpacity style={styles.pickerButton} onPress={() => go('products')}>
+                  <Text style={styles.pickerText}>Ir a Productos</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {products.map((product) => (
               <TouchableOpacity
                 key={product.id}
@@ -364,6 +402,22 @@ export default function ShelfZonesScreen({ go }) {
           <TouchableOpacity style={styles.modalClose} onPress={() => setProductPicker(false)}>
             <Text style={styles.modalCloseText}>Cerrar</Text>
           </TouchableOpacity>
+        </View>
+      </View>
+    )}
+    {confirmDelete && (
+      <View style={styles.modal}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>Borrar todas las zonas</Text>
+          <Text style={styles.muted}>Se eliminarán todas las zonas de esta repisa en la cámara. ¿Continuar?</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+            <TouchableOpacity style={styles.modalClose} onPress={() => setConfirmDelete(false)}>
+              <Text style={styles.modalCloseText}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalClose, { backgroundColor: C.danger, borderRadius: 10 }]} onPress={confirmDeleteZones}>
+              <Text style={[styles.modalCloseText, { color: '#fff' }]}>Eliminar</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     )}
