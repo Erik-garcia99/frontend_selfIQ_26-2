@@ -237,6 +237,14 @@ export const deviceAdapter = {
     });
     return result?.shelf ?? result;
   },
+  async updateShelf({ branchId, shelfId, name, location, accessToken }) {
+    const result = await apiRequest(`${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}`, {
+      method: 'PATCH',
+      accessToken,
+      body: { name, location_label: location ?? null },
+    });
+    return result?.shelf ?? result;
+  },
 
   async listRois({ branchId, shelfId, accessToken }) {
     return apiRequest(`${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/rois`, { accessToken });

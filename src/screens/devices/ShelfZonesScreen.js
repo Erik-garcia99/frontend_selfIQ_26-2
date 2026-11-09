@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, PanResponder, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Shell, ErrorNotice, Primary, Info, useDevices } from './DeviceUI';
 import { useAuth } from '../../context/AuthContext';
 import { deviceAdapter } from '../../services/deviceAdapter';
@@ -37,17 +37,28 @@ function validateZones(zones) {
   const ids = new Set();
   for (const zone of zones) {
     if (!zone.productId) return 'Cada zona necesita un producto asignado.';
-    if (zone.w < MIN_SIDE || zone.h < MIN_SIDE) return 'Una zona es demasiado pequeña (mínimo 3 %).';
-    if (zone.x < 0 || zone.y < 0 || zone.x + zone.w > 1 || zone.y + zone.h > 1) return 'Una zona se sale de la imagen.';
-    if (ids.has(zone.id)) return 'Hay zonas repetidas.';
+    if (zone.w < MIN_SIDE || zone.h < MIN_SIDE) return 'Haz la zona un poco más grande.';
+    if (zone.x < 0 || zone.y < 0 || zone.x + zone.w > 1 || zone.y + zone.h > 1) return 'Mantén todas las zonas dentro de la foto.';
+    if (ids.has(zone.id)) return 'Hay una zona repetida. Elimínala y vuelve a crearla.';
     ids.add(zone.id);
   }
   for (let i = 0; i < zones.length; i += 1) {
     for (let j = i + 1; j < zones.length; j += 1) {
-      if (zonesOverlap(zones[i], zones[j]) > OVERLAP_LIMIT) return 'Dos zonas se solapan.';
+      if (zonesOverlap(zones[i], zones[j]) > OVERLAP_LIMIT) return 'Separa las zonas para que no queden una encima de otra.';
     }
   }
   return '';
+}
+
+
+function friendlyCameraError(failure, fallback) {
+  const status = Number(failure?.status ?? 0);
+  if (status === 409) return 'La información cambió mientras editabas. Vuelve a cargar la pantalla e inténtalo de nuevo.';
+  if (status === 401 || status === 403) return 'No tienes permiso para hacer este cambio. Vuelve a iniciar sesión o consulta con un administrador.';
+  if (status === 404) return 'No encontramos la cámara o el estante. Vuelve a la lista de dispositivos y abre esta pantalla de nuevo.';
+  if (status === 408 || status === 502 || status === 503 || status === 504) return 'No pudimos comunicarnos con la cámara. Verifica que esté encendida e inténtalo de nuevo.';
+  if (status === 0) return 'No pudimos comunicarnos con el sistema. Revisa tu conexión e inténtalo de nuevo.';
+  return fallback;
 }
 
 export default function ShelfZonesScreen({ go }) {
@@ -70,6 +81,9 @@ export default function ShelfZonesScreen({ go }) {
   const [applying, setApplying] = useState(false);
   const [saved, setSaved] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editingShelf, setEditingShelf] = useState(false);
+  const [shelfNameDraft, setShelfNameDraft] = useState('');
+  const [shelfLocationDraft, setShelfLocationDraft] = useState('');
   const [size, setSize] = useState({ width: 0, height: 0 });
 
   const draftRef = useRef(null);   // { startX, startY, id } mientras se dibuja
@@ -88,6 +102,8 @@ export default function ShelfZonesScreen({ go }) {
         return;
       }
       setShelf(shelfValue);
+      setShelfNameDraft(shelfValue?.name || '');
+      setShelfLocationDraft(shelfValue?.location || '');
       const [roiData, productList, photo] = await Promise.all([
         deviceAdapter.listRois({ branchId, shelfId: shelfValue.id, accessToken }),
         deviceAdapter.listProducts({ branchId, accessToken }),
@@ -107,7 +123,7 @@ export default function ShelfZonesScreen({ go }) {
       setBaseVersion(roiData?.version ?? 0);
       setSnapshot(photo);
     } catch (failure) {
-      setError(failure?.message || 'No pudimos cargar las zonas.');
+      setError(friendlyCameraError(failure, 'No pudimos cargar la configuración. Inténtalo de nuevo.'));
     } finally {
       setLoading(false);
     }
@@ -256,10 +272,10 @@ export default function ShelfZonesScreen({ go }) {
       setApplying(true);
       setSaving(false);
       const applied = await d.mutate('applyRois', { branchId, shelfId: shelf.id, version });
-      if (!applied?.confirmed && applied?.ok !== true) throw new Error('El nodo no confirmó la aplicación.');
-      setSaved('Guardado y aplicado en la cámara.');
+      if (!applied?.confirmed && applied?.ok !== true) throw new Error('camera_not_confirmed');
+      setSaved('Cambios guardados.');
     } catch (failure) {
-      setError(failure?.message || 'No pudimos guardar o aplicar las zonas.');
+      setError(friendlyCameraError(failure, 'No pudimos guardar los cambios. Verifica que la cámara esté encendida e inténtalo de nuevo.'));
     } finally {
       setSaving(false);
       setApplying(false);
@@ -280,36 +296,61 @@ export default function ShelfZonesScreen({ go }) {
     doSaveAndApply();
   }
 
-  if (!deviceId || !branchId) return <Shell go={go} title="Zonas de la repisa" back="camera-detail">
+  async function saveShelfDetails() {
+    if (!shelf?.id || !shelfNameDraft.trim()) return;
+    try {
+      const updated = await deviceAdapter.updateShelf({
+        branchId, shelfId: shelf.id, name: shelfNameDraft.trim(),
+        location: shelfLocationDraft.trim() || null, accessToken,
+      });
+      setShelf(updated || { ...shelf, name: shelfNameDraft.trim(), location: shelfLocationDraft.trim() || null });
+      setEditingShelf(false);
+    } catch (failure) {
+      setError(friendlyCameraError(failure, 'No pudimos guardar los datos de la repisa.'));
+    }
+  }
+
+  if (!deviceId || !branchId) return <Shell go={go} title="Configurar zonas" back="camera-detail">
     <Info title="Selecciona una cámara">Vuelve a tus dispositivos y elige la cámara que quieres configurar.</Info>
   </Shell>;
 
-  if (loading) return <Shell go={go} title="Zonas de la repisa" back="camera-detail">
+  if (loading) return <Shell go={go} title="Configurar zonas" back="camera-detail">
     <View style={styles.center}><ActivityIndicator color={C.navy} /><Text style={styles.muted}>Cargando zonas…</Text></View>
   </Shell>;
 
-  if (!shelf) return <Shell go={go} title="Zonas de la repisa" back="camera-detail">
+  if (!shelf) return <Shell go={go} title="Configurar zonas" back="camera-detail">
     <Info title="Esta cámara no tiene repisa asignada">
-      Una cámara controla una repisa. Crea la repisa para esta cámara y después dibuja las zonas.
+      Primero crea la repisa que vas a monitorear. Después podrás marcar sus zonas sobre una foto.
     </Info>
     <Primary onPress={async () => {
       try {
         const created = await deviceAdapter.createShelf({ branchId, deviceId, name: 'Repisa principal', accessToken });
         if (created?.id) { setShelf(created); await load(); }
-      } catch (failure) { setError(failure?.message || 'No se pudo crear la repisa.'); }
-    }}>Crear repisa para esta cámara</Primary>
+      } catch (failure) { setError(friendlyCameraError(failure, 'No pudimos crear la repisa. Inténtalo de nuevo.')); }
+    }}>Crear repisa</Primary>
     <ErrorNotice message={error} />
   </Shell>;
 
-  if (!snapshot) return <Shell go={go} title="Zonas de la repisa" back="camera-detail">
-    <Info title="Toma una foto para empezar">Necesitamos una foto de la repisa para dibujar las zonas.</Info>
-    <Primary onPress={() => deviceAdapter.requestSnapshot({ branchId, deviceId, accessToken }).then(() => load())}>Tomar foto</Primary>
+  if (!snapshot) return <Shell go={go} title="Configurar zonas" back="camera-detail">
+    <Info title="Toma una foto para empezar">Usaremos la foto como guía para marcar las áreas que quieres monitorear.</Info>
+    <Primary onPress={async () => {
+      setError('');
+      try {
+        await deviceAdapter.requestSnapshot({ branchId, deviceId, accessToken });
+        await load();
+      } catch (failure) {
+        setError(friendlyCameraError(failure, 'No pudimos tomar la foto. Verifica que la cámara esté encendida e inténtalo de nuevo.'));
+      }
+    }}>Tomar foto</Primary>
     <ErrorNotice message={error} />
   </Shell>;
 
   const selectedZone = zones.find((zone) => zone.id === selected) || null;
 
-  return <Shell go={go} title="Zonas de la repisa" subtitle={`${device?.name || ''}${shelf?.name ? ' · ' + shelf.name : ''}`} back="camera-detail" busy={saving || applying}>
+  return <Shell go={go} title="Configurar zonas" subtitle={shelf?.name ? `Repisa: ${shelf.name}` : undefined} back="camera-detail" busy={saving || applying}>
+    {shelf ? <TouchableOpacity style={styles.editShelfButton} onPress={() => { setShelfNameDraft(shelf.name || ''); setShelfLocationDraft(shelf.location || ''); setEditingShelf(true); }}>
+      <Text style={styles.editShelfText}>Editar nombre y ubicación de la repisa</Text>
+    </TouchableOpacity> : null}
     <ErrorNotice message={error} />
     {saved ? <Info title="Listo">{saved}</Info> : null}
     <View style={styles.preview} onLayout={(event) => {
@@ -347,7 +388,7 @@ export default function ShelfZonesScreen({ go }) {
       </View>
     </View>
     <Text style={styles.hint}>
-      Pasos: 1) Dibuja un rectángulo tocando un espacio vacío. 2) Toca la zona y elige un producto. 3) Arrastra para mover, usa la esquina azul para redimensionar. 4) “Guardar y aplicar”. Máximo {MAX_ZONES} zonas.
+      Toca y arrastra sobre la foto para crear una zona. Después selecciónala, asigna un producto y ajusta su tamaño. Máximo {MAX_ZONES} zonas.
     </Text>
 
     {selectedZone && (
@@ -367,8 +408,8 @@ export default function ShelfZonesScreen({ go }) {
       </View>
     )}
 
-    <Primary onPress={saveAndApply} loading={saving || applying} loadingLabel={saving ? 'Guardando…' : 'Enviando a la cámara…'} disabled={!!validationError}>
-      {zones.length === 0 ? 'Borrar todas las zonas' : 'Guardar y aplicar'}
+    <Primary onPress={saveAndApply} loading={saving || applying} loadingLabel="Guardando…" disabled={!!validationError}>
+      {zones.length === 0 ? 'Borrar todas las zonas' : 'Guardar cambios'}
     </Primary>
     {validationError ? <ErrorNotice message={validationError} /> : null}
 
@@ -421,6 +462,23 @@ export default function ShelfZonesScreen({ go }) {
         </View>
       </View>
     )}
+    {editingShelf && (
+      <View style={styles.modal}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>Editar repisa</Text>
+          <TextInput style={styles.input} value={shelfNameDraft} onChangeText={setShelfNameDraft} placeholder="Nombre de la repisa" />
+          <TextInput style={styles.input} value={shelfLocationDraft} onChangeText={setShelfLocationDraft} placeholder="Ubicación (opcional)" />
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+            <TouchableOpacity style={styles.modalClose} onPress={() => setEditingShelf(false)}>
+              <Text style={styles.modalCloseText}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalClose, { backgroundColor: C.navy, borderRadius: 10 }]} onPress={saveShelfDetails}>
+              <Text style={[styles.modalCloseText, { color: '#fff' }]}>Guardar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    )}
   </Shell>;
 }
 
@@ -450,4 +508,7 @@ const styles = StyleSheet.create({
   productSku: { color: C.muted, fontSize: 12 },
   modalClose: { alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 12 },
   modalCloseText: { color: C.navy, fontSize: 14, fontWeight: '600' },
+  editShelfButton: { alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: C.border },
+  editShelfText: { color: C.navy, fontSize: 13, fontWeight: '600' },
+  input: { borderWidth: 1, borderColor: C.border, borderRadius: 10, padding: 10, color: C.ink, fontSize: 14 },
 });
