@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Modal, PanResponder, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Shell, ErrorNotice, Primary, Info, useDevices } from './DeviceUI';
+import { Shell, ErrorNotice, Primary, Info, NavRow, useDevices } from './DeviceUI';
 import { useAuth } from '../../context/AuthContext';
 import { deviceAdapter } from '../../services/deviceAdapter';
 import { colors as C } from '../../theme/colors';
@@ -353,6 +353,11 @@ export default function ShelfZonesScreen({ go }) {
     </TouchableOpacity> : null}
     <ErrorNotice message={error} />
     {saved ? <Info title="Listo">{saved}</Info> : null}
+    {saved ? <NavRow
+      label="Continuar con la calibración"
+      detail="Captura la zona vacía y abastecida"
+      onPress={() => { d.selectDevice(device); go('calibration'); }}
+    /> : null}
     <View style={styles.preview} onLayout={(event) => {
       const { width, height } = event.nativeEvent.layout;
       if (width !== size.width || height !== size.height) setSize({ width, height });
@@ -405,6 +410,16 @@ export default function ShelfZonesScreen({ go }) {
         <TouchableOpacity style={styles.danger} onPress={() => deleteZone(selectedZone.id)}>
           <Text style={styles.dangerText}>Borrar zona</Text>
         </TouchableOpacity>
+        {selectedZone.fromDb ? <TouchableOpacity
+          style={styles.calibrate}
+          onPress={() => {
+            d.setZone({ id: selectedZone.id, name: selectedZone.name, productId: selectedZone.productId });
+            go('calibration');
+          }}
+        >
+          <Text style={styles.calibrateText}>Preparar calibración de esta zona</Text>
+          <Text style={styles.calibrateDetail}>Usa la última versión guardada y aplicada en la cámara.</Text>
+        </TouchableOpacity> : null}
       </View>
     )}
 
@@ -500,6 +515,9 @@ const styles = StyleSheet.create({
   pickerText: { color: C.ink, fontSize: 14 },
   danger: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: C.danger },
   dangerText: { color: C.danger, fontSize: 13, fontWeight: '600' },
+  calibrate: { backgroundColor: C.navy, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, gap: 2 },
+  calibrateText: { color: C.white, fontSize: 14, fontWeight: '600' },
+  calibrateDetail: { color: C.subtitleOnDark, fontSize: 12 },
   modal: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: 20 },
   modalCard: { backgroundColor: C.field, borderRadius: 20, padding: 16, gap: 12 },
   modalTitle: { color: C.ink, fontSize: 18, fontWeight: '700' },

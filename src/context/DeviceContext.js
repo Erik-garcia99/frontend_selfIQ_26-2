@@ -23,6 +23,7 @@ export function DeviceProvider({ children }) {
   const reloadBranches = () => { setBranchError(''); setLoadingBranches(true); setAttempt(v => v + 1); };
   const [gateway, setGateway] = useState(null);
   const [device, setDevice] = useState(null);
+  const [zone, setZone] = useState(null);
   const [draft, setDraft] = useState({});
   const [discovery, setDiscovery] = useState(null);
   const [result, setResult] = useState(null);
@@ -35,12 +36,12 @@ export function DeviceProvider({ children }) {
     mutation.current = request(operation, payload).finally(() => { mutation.current = null; });
     return mutation.current;
   };
-  const selectDevice = (value) => { setDevice(value); setDraft({ name: value?.name || '', location: value?.location || '' }); setResult(null); };
+  const selectDevice = (value) => { setDevice(value); setZone(null); setDraft({ name: value?.name || '', location: value?.location || '' }); setResult(null); };
   const selectBranch = (id) => {
     if (mutation.current || !branches.some(branch => branch.id === id)) return;
     setBranchId(id); setGateway(null); selectDevice(null); setDiscovery(null); setFailure('');
   };
   return <Context.Provider value={{ branchId, branches, selectBranch, loadingBranches, branchError, reloadBranches, gateway, setGateway, device, selectDevice,
-    draft, setDraft, discovery, setDiscovery, result, setResult, failure, setFailure, request, mutate }}>{children}</Context.Provider>;
+    zone, setZone, draft, setDraft, discovery, setDiscovery, result, setResult, failure, setFailure, request, mutate }}>{children}</Context.Provider>;
 }
 export function useDevices() { return useContext(Context); }

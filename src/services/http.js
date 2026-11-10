@@ -1,5 +1,5 @@
-import { API_BASE_URL, validateApiConfiguration } from '../config/env';
-export { API_BASE_URL } from '../config/env';
+import { API_BASE_URL, validateApiConfiguration } from '../config/env.js';
+export { API_BASE_URL } from '../config/env.js';
 let onUnauthorized = null;
 export function setUnauthorizedHandler(handler) { onUnauthorized = handler; }
 export class ApiError extends Error {
@@ -34,7 +34,10 @@ export async function apiRequest(path, options = {}) {
         errorMessage(null, response.status), response.status);
     }
     if (!response.ok) {
-      throw new ApiError(errorMessage(data.detail, response.status), response.status);
+      const error = new ApiError(errorMessage(data.detail, response.status), response.status);
+      if (typeof data.code === 'string') error.code = data.code;
+      if (typeof data.request_id === 'string') error.requestId = data.request_id;
+      throw error;
     }
     return data;
   } catch (error) {

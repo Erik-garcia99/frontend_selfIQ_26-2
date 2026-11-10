@@ -140,6 +140,11 @@ function CameraDetail({ go, d, accessToken }) {
     </View>
 
     <NavRow
+      label="Preparar zona"
+      detail="Captura la zona vacía y abastecida para que la cámara pueda medirla"
+      onPress={() => { d.selectDevice(device); go('calibration'); }}
+    />
+    <NavRow
       label="Configurar zonas"
       detail="Marca las áreas del estante que quieres monitorear"
       onPress={() => { d.selectDevice(device); go('shelf-zones'); }}
