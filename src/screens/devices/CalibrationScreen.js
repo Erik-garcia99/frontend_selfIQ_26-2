@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Shell, ErrorNotice, Primary, Info, NavRow, SectionLabel, useDevices } from './DeviceUI';
 import { useAuth } from '../../context/AuthContext';
 import { deviceAdapter } from '../../services/deviceAdapter';
 import { calibrationService } from '../../services/calibrationService.js';
-import { newClientId, nextAction, sessionStateLabel, kindLabel, calibrationErrorText } from '../../utils/calibration.js';
+import { newClientId, nextAction, sessionStateLabel, sessionProgressText, kindLabel, calibrationErrorText } from '../../utils/calibration.js';
 import { colors as C } from '../../theme/colors';
 
 const REFERENCES = [
@@ -31,8 +31,10 @@ export default function CalibrationScreen({ go }) {
   const [session, setSession] = useState(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
+  // Cancelar descarta el borrador: pedimos un segundo toque para no abortar
+  // una calibración por accidente al buscar el botón de guardar.
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [images, setImages] = useState({});
-  const pollRef = useRef(null);
 
   const load = useCallback(async () => {
     if (!branchId || !deviceId) return;
@@ -78,8 +80,6 @@ export default function CalibrationScreen({ go }) {
     return () => { cancelled = true; };
   }, [branchId, selectedId, accessToken]);
 
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
-
   const selected = zones.find((zone) => zone.id === selectedId) || null;
   const action = nextAction(session);
 
@@ -104,21 +104,34 @@ export default function CalibrationScreen({ go }) {
     if (!branchId || !selectedId || !calibrationId) return;
     const next = await calibrationService.getSession({ branchId, roiId: selectedId, calibrationId, accessToken });
     setSession(next);
+    setStatus(sessionProgressText(next));
     return next;
   }, [branchId, selectedId, accessToken]);
 
-  const startPolling = (calibrationId) => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
+  // También reanuda la consulta al volver a una sesión pendiente. Un 202 no
+  // significa que la cámara ya guardó/canceló la calibración.
+  useEffect(() => {
+    if (!session?.id || !action.startsWith('wait_')) return;
+    const calibrationId = session.id;
+    let cancelled = false;
+    let inFlight = false;
+    const timer = setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
-        const next = await refreshSession(calibrationId);
-        if (next && ['empty_ready', 'pair_ready', 'active', 'cancelled', 'failed'].includes(next.state)) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
+        const next = await calibrationService.getSession({ branchId, roiId: selectedId, calibrationId, accessToken });
+        if (!cancelled) {
+          setSession(next);
+          setStatus(sessionProgressText(next));
         }
       } catch (_e) { /* ignore transient */ }
+      finally { inFlight = false; }
     }, 2000);
-  };
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [session?.id, action, branchId, selectedId, accessToken]);
 
   const createSession = async () => {
     if (!selected) return;
@@ -126,6 +139,7 @@ export default function CalibrationScreen({ go }) {
     try {
       const s = await calibrationService.createSession({ branchId, roiId: selected.id, accessToken, idempotencyKey: newClientId() });
       setSession(s);
+      setConfirmCancel(false);
       setStatus('');
     } catch (failure) {
       setError(friendlyError(failure, 'No pudimos iniciar la calibración.'));
@@ -136,9 +150,8 @@ export default function CalibrationScreen({ go }) {
     if (!session) return;
     setBusy(true); setError(''); setStatus(`Solicitando captura ${kindLabel(kind)}…`);
     try {
-      const op = await calibrationService.capture({ branchId, roiId: selected.id, calibrationId: session.id, kind, captureId: newClientId(), sessionVersion: session.sessionVersion, accessToken, idempotencyKey: newClientId() });
-      setStatus('Esperando confirmación de la cámara…');
-      startPolling(session.id);
+      await calibrationService.capture({ branchId, roiId: selected.id, calibrationId: session.id, kind, captureId: newClientId(), sessionVersion: session.sessionVersion, accessToken, idempotencyKey: newClientId() });
+      await refreshSession(session.id);
     } catch (failure) {
       setError(friendlyError(failure, 'No pudimos solicitar la captura.'));
     } finally { setBusy(false); }
@@ -159,7 +172,6 @@ export default function CalibrationScreen({ go }) {
     try {
       await calibrationService.commit({ branchId, roiId: selected.id, calibrationId: session.id, sessionVersion: session.sessionVersion, references: refs, accessToken, idempotencyKey: newClientId() });
       await refreshSession(session.id);
-      setStatus('Calibración guardada.');
     } catch (failure) {
       setError(friendlyError(failure, 'No pudimos confirmar la calibración.'));
     } finally { setBusy(false); }
@@ -173,7 +185,13 @@ export default function CalibrationScreen({ go }) {
       await refreshSession(session.id);
     } catch (failure) {
       setError(friendlyError(failure, 'No pudimos cancelar.'));
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setConfirmCancel(false); }
+  };
+
+  const onCancelPress = () => {
+    if (busy) return;
+    if (!confirmCancel) { setConfirmCancel(true); return; }
+    cancel();
   };
 
   if (!deviceId || !branchId) return <Shell go={go} title="Preparar zona" back="camera-detail">
@@ -202,7 +220,7 @@ export default function CalibrationScreen({ go }) {
         {zones.map((zone) => {
           const active = zone.id === selectedId;
           return <TouchableOpacity key={zone.id} accessibilityRole="button" accessibilityState={{ selected: active }}
-            onPress={() => { setSelectedId(zone.id); setSession(null); }}
+            onPress={() => { setSelectedId(zone.id); setSession(null); setConfirmCancel(false); }}
             style={[styles.zoneRow, active && styles.zoneRowActive]}>
             <View style={styles.zoneInfo}>
               <Text style={styles.zoneName} numberOfLines={1}>{zone.productName || zone.name || 'Zona sin producto'}</Text>
@@ -238,16 +256,40 @@ export default function CalibrationScreen({ go }) {
           <Primary onPress={commit} disabled={busy}>Guardar calibración</Primary>
         </>}
         {action === 'done' && <Info title="Calibración guardada">Esta zona ya tiene una calibración activa.</Info>}
-        {(action === 'closed' || action === 'unknown') && <Info title="Sesión cerrada">Inicia una nueva calibración.</Info>}
+        {(action === 'closed' || action === 'unknown') && <>
+          <Info title="Sesión cerrada">Puedes editar las zonas o iniciar una nueva calibración.</Info>
+          <Primary onPress={createSession} disabled={busy}>Comenzar otra calibración</Primary>
+        </>}
+        {action === 'wait_cancel' && <Info title="Cancelación pendiente">La cámara aún no confirmó. Las zonas siguen protegidas mientras se consulta el resultado; cancelar otra vez no alarga el plazo.</Info>}
+        {action === 'wait_confirm' && <Info title="Guardado pendiente">Espera la confirmación de la cámara antes de cambiar las zonas.</Info>}
 
         {session.references?.length ? <View style={styles.refs}>
           {session.references.map((ref, idx) => <Text key={idx} style={styles.muted}>{kindLabel(ref.kind)}: {ref.status}</Text>)}
         </View> : null}
 
-        {session.state !== 'active' && session.state !== 'cancelled' && (
-          <TouchableOpacity onPress={cancel} disabled={busy} style={styles.cancelBtn}>
-            <Text style={styles.cancelText}>Cancelar</Text>
-          </TouchableOpacity>
+        {!['active', 'cancelled', 'expired', 'failed', 'committing'].includes(session.state) && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cancelar calibración"
+            accessibilityHint="Descarta las capturas de esta sesión y libera la cámara"
+            accessibilityState={{ disabled: busy, busy }}
+            disabled={busy}
+            onPress={onCancelPress}
+            style={({ pressed }) => [
+              styles.cancelBtn,
+              confirmCancel && styles.cancelBtnArmed,
+              busy && { opacity: .55 },
+              pressed && { opacity: .8 },
+            ]}>
+            <Text style={[styles.cancelText, confirmCancel && styles.cancelTextArmed]}>
+              {confirmCancel ? 'Toca otra vez para cancelar' : 'Cancelar calibración'}
+            </Text>
+            <Text style={[styles.cancelHint, confirmCancel && styles.cancelTextArmed]}>
+              {confirmCancel
+                ? 'Se descartarán las capturas de esta sesión.'
+                : 'Libera la cámara para poder editar las zonas.'}
+            </Text>
+          </Pressable>
         )}
       </>}
 
@@ -271,6 +313,21 @@ const styles = StyleSheet.create({
   imgRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
   imgBox: { flex: 1, gap: 6 },
   img: { width: '100%', height: 120, borderRadius: 12, backgroundColor: C.field },
-  cancelBtn: { marginTop: 12, alignSelf: 'flex-start' },
-  cancelText: { color: C.muted, fontSize: 14, textDecorationLine: 'underline' },
+  cancelBtn: {
+    marginTop: 18,
+    minHeight: 56,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.danger,
+    backgroundColor: C.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  cancelBtnArmed: { backgroundColor: C.danger, borderColor: C.danger },
+  cancelText: { color: C.danger, fontSize: 15, fontWeight: '700' },
+  cancelTextArmed: { color: C.white },
+  cancelHint: { color: C.dangerText, fontSize: 12, textAlign: 'center' },
 });

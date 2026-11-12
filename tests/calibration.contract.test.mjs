@@ -70,7 +70,7 @@ test('siguiente acción según estado y referencias', () => {
   assert.equal(nextAction({
     state: 'pair_ready',
     references: [{ kind: 'empty', status: 'ready' }, { kind: 'full', status: 'image_pending' }],
-  }), 'capture_missing');
+  }), 'wait_capture');
   assert.equal(nextAction({ state: 'committing' }), 'wait_confirm');
   assert.equal(nextAction({ state: 'active' }), 'done');
   assert.equal(nextAction({ state: 'failed' }), 'closed');

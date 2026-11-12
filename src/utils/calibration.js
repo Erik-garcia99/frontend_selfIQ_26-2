@@ -20,7 +20,7 @@ export const SESSION_TRANSITIONS = {
   pair_ready: ['committing', 'cancelled', 'expired', 'failed'],
   committing: ['active', 'pair_ready', 'failed'],
   active: [],
-  cancel_pending: ['cancelled', 'active'],
+  cancel_pending: ['cancelled', 'active', 'failed', 'expired'],
   cancelled: [],
   expired: [],
   failed: [],
@@ -80,8 +80,9 @@ export function nextAction(session) {
     case 'draft':
       return pending(lastOf('empty')) ? 'wait_capture' : 'capture_empty';
     case 'empty_ready':
-      return pending(lastOf('full')) ? 'wait_capture' : 'capture_full';
+      return pending(lastOf('empty')) || pending(lastOf('full')) ? 'wait_capture' : 'capture_full';
     case 'pair_ready':
+      if (pending(lastOf('empty')) || pending(lastOf('full'))) return 'wait_capture';
       return ready(lastOf('empty')) && ready(lastOf('full')) ? 'review_commit' : 'capture_missing';
     case 'committing':
       return 'wait_confirm';
@@ -104,6 +105,19 @@ export function newClientId() {
     const value = character === 'x' ? random : (random & 0x3) | 0x8;
     return value.toString(16);
   });
+}
+
+// Un 202 solo acepta la operación. El texto de éxito depende del estado real.
+export function sessionProgressText(session) {
+  switch (session?.state) {
+    case 'cancelled': return 'Calibración cancelada. Ya puedes editar las zonas.';
+    case 'active': return 'Calibración guardada.';
+    case 'failed': return 'La operación falló. La sesión está cerrada; puedes editar las zonas o volver a intentar.';
+    case 'expired': return 'La sesión caducó. Ya puedes editar las zonas.';
+    case 'cancel_pending': return 'Esperando confirmación de cancelación de la cámara…';
+    case 'committing': return 'Esperando confirmación de guardado de la cámara…';
+    default: return '';
+  }
 }
 
 const encode = (value) => encodeURIComponent(value);
