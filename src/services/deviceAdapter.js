@@ -1,7 +1,7 @@
 // Adaptador real del contrato src/services/deviceService.js.
 // Traduce las operaciones del panel a los endpoints de backend/app/devices.py
 // y normaliza las respuestas. Nunca inventa confirmaciones.
-import { apiRequest, ApiError, API_BASE_URL } from './http';
+import { apiRequest, ApiError, API_BASE_URL } from './http.js';
 
 const branchPath = (branchId) => `/branches/${encodeURIComponent(branchId)}`;
 const devicePath = (branchId, deviceId) =>
@@ -65,7 +65,7 @@ function confirmed(result, message, check = () => true) {
 // El backend entrega `X-Captured-At` como "YYYY-MM-DD HH:MM:SS.ffffff+00:00".
 // Ese formato no es ISO 8601 y Hermes puede devolver Invalid Date, así que se
 // normaliza antes de mostrarlo o compararlo.
-function snapshotTimestamp(value) {
+export function snapshotTimestamp(value) {
   if (!value) return null;
   const match = String(value).trim().match(
     /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\.(\d+))?\s*(Z|[+-]\d{2}:?\d{2})?$/,
@@ -81,7 +81,7 @@ function snapshotTimestamp(value) {
 
 // Huella barata del JPEG. Sirve para detectar una foto nueva sin depender de la
 // cabecera de fecha (que puede faltar o no ser parseable en el cliente).
-function snapshotFingerprint(bytes) {
+export function snapshotFingerprint(bytes) {
   let hash = 0x811c9dc5;
   for (let index = 0; index < bytes.length; index += 1) {
     hash ^= bytes[index];
