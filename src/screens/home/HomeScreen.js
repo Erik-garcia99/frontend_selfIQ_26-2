@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { Nav } from '../../components/ui';
 import BranchSwitcher from '../../components/BranchSwitcher';
 import { useAuth } from '../../context/AuthContext';
 import { useDevices } from '../../context/DeviceContext';
 import { apiRequest } from '../../services/http';
+import { colors as C } from '../../theme/colors';
 import { styles } from '../../theme/styles';
 import { navIcons, frameIcons } from '../../theme/assets';
 import { canManage } from '../../utils/validation';
@@ -24,12 +25,36 @@ function QuickCard({ title, detail, icon, onPress }) {
 
 export default function HomeScreen({ go }) {
   const { user, accessToken } = useAuth();
-  const { branchId, branches } = useDevices();
+  const d = useDevices();
+  const { branchId, branches } = d;
   const [apiOnline, setApiOnline] = useState(null);
   const branch = useMemo(() => branches.find((item) => item.id === branchId), [branches, branchId]);
   const telemetry = useTemperature(accessToken, branchId);
   const occupancy = useOccupancy(accessToken, branchId);
   const occupancyReading = occupancyPresentation(occupancy);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetError, setResetError] = useState('');
+
+  const openReset = () => { setResetMessage(''); setResetError(''); setResetOpen(true); };
+  const closeReset = () => { if (!resetting) setResetOpen(false); };
+  const resetOccupancy = async () => {
+    setResetting(true); setResetMessage(''); setResetError('');
+    try {
+      const devices = await d.request('listDevices');
+      const node = devices.find((item) => item.type === 'occupancy');
+      if (!node) throw new Error('No hay un nodo de aforo registrado en esta sucursal.');
+      await apiRequest(`/branches/${encodeURIComponent(branchId)}/occupancy/adjustments`, {
+        method: 'POST', accessToken, timeout: 30000,
+        body: { node_id: node.id, value: 0, reason: 'Reset rápido desde inicio' },
+      });
+      setResetMessage('Aforo restablecido a 0.');
+      occupancy.refresh();
+    } catch (error) {
+      setResetError(error?.message || 'No se pudo resetear el aforo.');
+    } finally { setResetting(false); }
+  };
 
   useEffect(() => {
     let active = true;
@@ -49,7 +74,14 @@ export default function HomeScreen({ go }) {
       <Text style={styles.homeSectionLabel}>Resumen de la sucursal</Text>
       <View style={styles.current}>
         <View style={styles.homeMetricIcon}><Image source={frameIcons.occupancy || navIcons.panel} style={styles.peopleImage} /></View>
-        <View style={styles.currentInfo}><Text style={styles.currentTitle}>Aforo actual</Text><Text style={styles.currentNumber}>{occupancyReading.label}</Text><Text style={styles.quickDetail}>{occupancyReading.status}</Text></View>
+        <View style={styles.currentInfo}><Text style={styles.currentTitle}>Aforo actual</Text>
+          {canManage(user) ? <Pressable accessibilityRole="button" accessibilityLabel="Resetear aforo" onPress={openReset}><Text style={styles.currentNumber}>{occupancyReading.label}</Text></Pressable>
+            : <Text style={styles.currentNumber}>{occupancyReading.label}</Text>}
+          <Text style={styles.quickDetail}>{occupancyReading.status}</Text>
+          {canManage(user) ? <Pressable accessibilityRole="button" accessibilityLabel="Resetear aforo" onPress={openReset} style={({ pressed }) => [{ marginTop: 6, alignSelf: 'flex-start' }, pressed && { opacity: .6 }]}>
+            <Text style={{ color: C.dangerText, fontSize: 11.5, fontWeight: '800' }}>Resetear aforo</Text>
+          </Pressable> : null}
+        </View>
         <TemperatureIndicator telemetry={telemetry} />
       </View>
 
@@ -69,6 +101,33 @@ export default function HomeScreen({ go }) {
         <QuickCard title="Mi cuenta" detail="Perfil, seguridad y preferencias." icon={navIcons.settings} onPress={() => go('settings')} />
       </View>
     </ScrollView>
+
+    <Modal visible={resetOpen} transparent animationType="fade" onRequestClose={closeReset}>
+      <View style={{ flex: 1, justifyContent: 'center', padding: 22, backgroundColor: 'rgba(0,29,57,.45)' }}>
+        <View style={{ backgroundColor: C.white, borderRadius: 24, padding: 22 }}>
+          <Text style={{ color: C.navy, fontSize: 22, fontWeight: '800' }}>Resetear aforo</Text>
+          <Text style={{ color: C.text, fontSize: 14, lineHeight: 21, marginTop: 10 }}>
+            El contador actual se pondrá en 0. Las entradas y salidas ya registradas no se borran.
+          </Text>
+          {resetError ? <Text accessibilityRole="alert" style={{ color: C.danger, fontSize: 13, lineHeight: 19, marginTop: 12 }}>{resetError}</Text> : null}
+          {resetMessage ? <Text accessibilityLiveRegion="polite" style={{ color: '#18794E', fontSize: 13, lineHeight: 19, marginTop: 12 }}>{resetMessage}</Text> : null}
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 18 }}>
+            {resetMessage ? <Pressable accessibilityRole="button" onPress={closeReset} style={{ padding: 10 }}>
+                <Text style={{ color: C.navy, fontWeight: '800' }}>Cerrar</Text>
+              </Pressable>
+              : <>
+                <Pressable accessibilityRole="button" disabled={resetting} onPress={closeReset} style={{ padding: 10, opacity: resetting ? .5 : 1 }}>
+                  <Text style={{ color: C.text, fontWeight: '700' }}>Cancelar</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" disabled={resetting} onPress={resetOccupancy} style={{ padding: 10, opacity: resetting ? .5 : 1 }}>
+                  <Text style={{ color: C.danger, fontWeight: '800' }}>{resetting ? 'Reseteando…' : 'Resetear aforo'}</Text>
+                </Pressable>
+              </>}
+          </View>
+        </View>
+      </View>
+    </Modal>
+
     <Nav active="home" go={go} />
   </View>;
 }

@@ -50,9 +50,14 @@ test('carga y ausencia de sucursal tienen estado propio', () => {
 
 test('Inicio incluye el indicador dentro de Aforo actual, sin tarjeta adicional', () => {
   const home = readFileSync(new URL('../src/screens/home/HomeScreen.js', import.meta.url), 'utf8');
-  const card = home.split('\n').find((line) => line.includes('style={styles.current}'));
+  const lines = home.split('\n');
+  const start = lines.findIndex((line) => line.includes('style={styles.current}'));
+  const indicator = lines.findIndex((line, index) =>
+    index > start && line.includes('<TemperatureIndicator telemetry={telemetry} />'));
+  assert.ok(start >= 0, 'no se encontró la tarjeta de aforo');
+  assert.ok(indicator > start, 'el indicador debe estar dentro de la tarjeta de aforo');
+  const card = lines.slice(start, indicator + 1).join('\n');
   assert.ok(card.includes('Aforo actual'));
-  assert.ok(card.includes('<TemperatureIndicator telemetry={telemetry} />'));
   assert.equal(home.includes('TemperatureDetails'), false);
   assert.equal(home.includes('Monitoreo ambiental'), false);
 });

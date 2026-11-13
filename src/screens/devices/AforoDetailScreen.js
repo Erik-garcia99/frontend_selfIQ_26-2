@@ -19,16 +19,21 @@ const adjustOccupancy = async (value, reason) => {
     const v = Number(value);
     if (!Number.isInteger(v) || v < 0) throw new Error('Valor inválido');
     await apiRequest(`/branches/${encodeURIComponent(d.branchId)}/occupancy/adjustments`, {
-      method: 'POST', accessToken,
+      method: 'POST', accessToken, timeout: 30000,
       body: { node_id: d.device?.id, value: v, reason: reason || 'Ajuste manual' },
     });
     setAdjustMsg(`Aforo ajustado a ${v}.`);
     setAdjustOpen(false);
+    state.reload();
   } catch (e) { setAdjustMsg(e?.message || 'No se pudo ajustar el aforo.'); }
   finally { setAdjusting(false); }
 };
 
-const quickReset = () => adjustOccupancy(0, 'Reset rápido a 0');
+const openAdjust = () => {
+  setAdjustValue(reading?.occupancy != null ? String(reading.occupancy) : '0');
+  setAdjustReason('');
+  setAdjustOpen(true);
+};
 
  return <Shell go={go} title={deviceLabel(d.device)} back="registered-devices"><LoadState state={state}>
  <Info title={statusLabel(device)}>{device?.lastSeenAt ? `Última comunicación: ${new Date(device.lastSeenAt).toLocaleString()}` : 'Todavía no hay información de comunicación.'}</Info>
@@ -38,8 +43,7 @@ const quickReset = () => adjustOccupancy(0, 'Reset rápido a 0');
  <Copy>{reading?.measuredAt ? `Medido: ${new Date(reading.measuredAt).toLocaleString()}` : 'Sin fecha de medición'}</Copy></Info>
  <FieldCard label="Nombre" value={device?.name} /><FieldCard label="Ubicación" value={device?.location} />
  {adjustMsg ? <Info title="Ajuste">{adjustMsg}</Info> : null}
- <Primary disabled={!device?.id || adjusting} onPress={quickReset}>{adjusting ? 'Reseteando…' : 'Resetear a 0'}</Primary>
- <Primary disabled={!device?.id} onPress={() => setAdjustOpen(true)}>Ajuste fino</Primary>
+ <Primary disabled={!device?.id || adjusting} onPress={openAdjust}>{adjusting ? 'Ajustando…' : 'Ajustar aforo'}</Primary>
  <Primary disabled={!device?.id} onPress={() => { d.selectDevice(device); go('edit-aforo'); }}>Editar datos</Primary>
  <Primary variant="danger" disabled={!device?.id} onPress={() => { d.selectDevice(device); go('delete-device'); }}>Eliminar dispositivo</Primary></LoadState>
  <Modal visible={adjustOpen} transparent animationType="slide" onRequestClose={() => setAdjustOpen(false)}>
