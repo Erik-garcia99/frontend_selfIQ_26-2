@@ -89,3 +89,13 @@ export function LinkButton({ children, onPress, align = 'center' }) {
   return <Pressable accessibilityRole="link" onPress={onPress} style={align === 'center' ? L.linkWrap : undefined}>
     <Text style={[L.link, align === 'right' && { textAlign: 'right' }]}>{children}</Text></Pressable>;
 }
+
+// Selector de dos o más opciones (p. ej. Cliente / Empleado en el registro).
+export function ChoiceRow({ options, value, onChange, disabled = false }) {
+  return <View style={L.choiceRow}>{options.map(([id, label]) =>
+    <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: value === id, disabled }}
+      disabled={disabled} onPress={() => onChange?.(id)}
+      style={({ pressed }) => [L.choice, value === id && L.choiceActive, disabled && { opacity: .55 }, pressed && { opacity: .8 }]}>
+      <Text style={[L.choiceText, value === id && L.choiceTextActive]}>{label}</Text>
+    </Pressable>)}</View>;
+}
