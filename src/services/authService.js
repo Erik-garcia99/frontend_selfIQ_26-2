@@ -1,5 +1,7 @@
 import { apiRequest } from './http';
 export const login = (email, password) => apiRequest('/auth/login', { method: 'POST', body: { email, password } });
+export const logout = (refreshToken, accessToken) => apiRequest('/auth/logout', { method: 'POST', body: { refresh_token: refreshToken }, accessToken });
+export const refreshSession = (refreshToken) => apiRequest('/auth/refresh', { method: 'POST', body: { refresh_token: refreshToken } });
 export const register = (payload) => apiRequest('/auth/register', { method: 'POST', body: payload });
 export const registerCustomer = (payload) => apiRequest('/auth/customer-register', { method: 'POST', body: payload });
 export const getCurrentUser = (accessToken) => apiRequest('/auth/me', { accessToken });
