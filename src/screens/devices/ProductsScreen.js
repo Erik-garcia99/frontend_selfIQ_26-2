@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Shell, ErrorNotice, LoadState, useData, useDevices, FieldCard, Primary, Info, SectionLabel } from './DeviceUI';
 import { describeError } from '../../utils/errorMessages';
 import { useAuth } from '../../context/AuthContext';
 import { canManage } from '../../utils/validation';
 import { colors as C } from '../../theme/colors';
+import { useAuth } from '../../context/AuthContext';
+import PhysicalConfigForm from './PhysicalConfigForm';
 
-function ProductRow({ product }) {
-  return <View style={styles.row}>
+function ProductRow({ product, onPress }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Configurar ${product.name}`}
+    onPress={onPress} style={styles.row}>
     <View style={{ flex: 1 }}>
       <Text style={styles.name}>{product.name}</Text>
       <Text style={styles.sku}>SKU · {product.sku}</Text>
@@ -15,10 +18,16 @@ function ProductRow({ product }) {
     <Text style={[styles.badge, product.active ? styles.active : styles.inactive]}>
       {product.active ? 'Activo' : 'Inactivo'}
     </Text>
-  </View>;
+  </Pressable>;
 }
 
 export default function ProductsScreen({ go }) {
+  const { branchId } = useDevices();
+  const { accessToken } = useAuth();
+  return <ProductsWorkspace key={`${branchId}:${accessToken}`} go={go} accessToken={accessToken} />;
+}
+
+function ProductsWorkspace({ go, accessToken }) {
   const d = useDevices();
   const { user } = useAuth();
   const state = useData('listProducts');
@@ -29,6 +38,7 @@ export default function ProductsScreen({ go }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
+  const [selected, setSelected] = useState(null);
 
   const query = search.trim().toLowerCase();
   const products = (state.data || []).filter(product =>
@@ -54,7 +64,12 @@ export default function ProductsScreen({ go }) {
     }
   }
 
-  return <Shell go={go} title="Productos" subtitle="Catálogo disponible para asignar a las zonas." back="panel">
+  if (selected) return <Shell go={route => route === 'products' ? setSelected(null) : go(route)}
+    title="Configuración física" subtitle={selected.sku} back="products">
+    <PhysicalConfigForm branchId={d.branchId} accessToken={accessToken} product={selected} onClose={() => setSelected(null)} />
+  </Shell>;
+
+  return <Shell go={go} title="Productos" subtitle="Selecciona un producto para configurar medidas y zonas." back="panel">
     <TextInput
       accessibilityLabel="Buscar productos"
       value={search}
@@ -77,7 +92,7 @@ export default function ProductsScreen({ go }) {
     <LoadState state={state}>
       {products.length === 0
         ? <Info>{query ? 'Ningún producto coincide con la búsqueda.' : 'Todavía no hay productos en esta sucursal.'}</Info>
-        : products.map(product => <ProductRow key={product.id} product={product} />)}
+        : products.map(product => <ProductRow key={product.id} product={product} onPress={() => setSelected(product)} />)}
     </LoadState>
     <Primary variant="light" onPress={state.reload}>Actualizar catálogo</Primary>
 
@@ -89,7 +104,7 @@ export default function ProductsScreen({ go }) {
       <Primary variant="light" disabled={busy} onPress={() => { setShowForm(false); setError(''); }}>Cancelar</Primary>
     </> : <Primary onPress={() => { setShowForm(true); setSaved(''); setError(''); }}>Nuevo producto</Primary>}
 
-    <Info>Los productos se crean para la sucursal seleccionada y después se asignan a cada zona de la repisa.</Info>
+    <Info>El catálogo y las medidas del producto se comparten en la organización. Las zonas y sus asociaciones pertenecen a la sucursal seleccionada.</Info>
   </Shell>;
 }
 
