@@ -15,7 +15,7 @@ import NotificationsSettings from '../screens/settings/NotificationsSettingsScre
 import SecuritySettings from '../screens/settings/SecuritySettingsScreen';
 import Logout from '../screens/settings/LogoutScreen';
 import Panel from '../screens/PanelScreen';
-import Alerts from '../screens/PlaceholderScreen';
+import Alerts from '../screens/alerts/LiveAlertsScreen';
 import Tokens from '../screens/admin/TokenScreen';
 import Approve from '../screens/admin/ApproveUserScreen';
 import Gateway from '../screens/gateways/GatewayScreen';
