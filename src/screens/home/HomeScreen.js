@@ -47,11 +47,7 @@ export default function HomeScreen({ go }) {
       <View style={styles.hello}><Text style={styles.helloText}>Hola, {user?.first_name || 'usuario'}</Text><Text style={styles.helloSub}>Esto es lo más importante de tu tienda ahora.</Text></View>
 
       <Text style={styles.homeSectionLabel}>Resumen de la sucursal</Text>
-      <View style={styles.current}>
-        <View style={styles.homeMetricIcon}><Image source={frameIcons.occupancy || navIcons.panel} style={styles.peopleImage} /></View>
-        <View style={styles.currentInfo}><Text style={styles.currentTitle}>Aforo actual</Text><Text style={styles.currentNumber}>{occupancyReading.label}</Text><Text style={styles.quickDetail}>{occupancyReading.status}</Text></View>
-        <TemperatureIndicator telemetry={telemetry} />
-      </View>
+      <View style={styles.current}><View style={styles.homeMetricIcon}><Image source={frameIcons.occupancy || navIcons.panel} style={styles.peopleImage} /></View><View style={styles.currentInfo}><Text style={styles.currentTitle}>Aforo actual</Text><Text style={styles.currentNumber}>{occupancyReading.label}</Text><Text style={styles.quickDetail}>{occupancyReading.status}</Text></View><TemperatureIndicator telemetry={telemetry} /></View>
 
       <View style={styles.cardsRow}>
         {[

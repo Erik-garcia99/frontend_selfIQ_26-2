@@ -7,6 +7,7 @@ import { colors as C } from '../../theme/colors';
 
 const MAX_ZONES = 8;
 const MIN_SIDE = 0.03;
+const DEFAULT_SIDE = 0.15;
 const OVERLAP_LIMIT = 0.02;
 
 function newId() {
@@ -51,6 +52,96 @@ function validateZones(zones) {
 }
 
 
+// Zona dibujada sobre la foto. Cada zona gestiona su propio arrastre y su
+// propio tirador de tamaño. Es importante que el toque no dependa de
+// `locationX/locationY` del contenedor: en Android/iOS esas coordenadas son
+// relativas al hijo tocado, no al contenedor con el PanResponder, por eso el
+// rectángulo aparecía desplazado solo en el teléfono (en web funcionaba).
+function ZoneBox({ zone, selected, imageRect, label, onSelect, onMove, onResize, onDelete }) {
+  const dragOrigin = useRef(null);
+  const resizeOrigin = useRef(null);
+  const current = useRef({ zone, onSelect, onMove, onResize, onDelete });
+  useEffect(() => {
+    current.current = { zone, onSelect, onMove, onResize, onDelete };
+  });
+
+  // eslint-disable-next-line react-hooks/refs
+  const dragResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    // Sin reclamar en movimiento: así un toque con temblor en el botón ✕ o en
+    // el tirador no es robado por la zona.
+    onMoveShouldSetPanResponder: () => false,
+    onPanResponderGrant: () => {
+      const state = current.current;
+      state.onSelect();
+      dragOrigin.current = { x: state.zone.x, y: state.zone.y };
+    },
+    onPanResponderMove: (_event, gesture) => {
+      const origin = dragOrigin.current;
+      if (!origin || imageRect.width === 0 || imageRect.height === 0) return;
+      current.current.onMove(
+        origin.x + gesture.dx / imageRect.width,
+        origin.y + gesture.dy / imageRect.height,
+      );
+    },
+    onPanResponderRelease: () => { dragOrigin.current = null; },
+    onPanResponderTerminate: () => { dragOrigin.current = null; },
+    onPanResponderTerminationRequest: () => false,
+    onShouldBlockNativeResponder: () => true,
+  }), [imageRect.width, imageRect.height]);
+
+  // eslint-disable-next-line react-hooks/refs
+  const resizeResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => false,
+    onPanResponderGrant: () => {
+      const state = current.current;
+      state.onSelect();
+      resizeOrigin.current = { w: state.zone.w, h: state.zone.h };
+    },
+    onPanResponderMove: (_event, gesture) => {
+      const origin = resizeOrigin.current;
+      if (!origin || imageRect.width === 0 || imageRect.height === 0) return;
+      current.current.onResize(
+        origin.w + gesture.dx / imageRect.width,
+        origin.h + gesture.dy / imageRect.height,
+      );
+    },
+    onPanResponderRelease: () => { resizeOrigin.current = null; },
+    onPanResponderTerminate: () => { resizeOrigin.current = null; },
+    onPanResponderTerminationRequest: () => false,
+    onShouldBlockNativeResponder: () => true,
+  }), [imageRect.width, imageRect.height]);
+
+  return (
+    <View
+      style={[styles.zone, {
+        left: imageRect.x + zone.x * imageRect.width,
+        top: imageRect.y + zone.y * imageRect.height,
+        width: Math.max(24, zone.w * imageRect.width),
+        height: Math.max(24, zone.h * imageRect.height),
+        borderColor: selected ? C.navy : C.muted,
+        backgroundColor: selected ? 'rgba(36,116,67,0.18)' : 'rgba(0,0,0,0.08)',
+      }]}
+      {...dragResponder.panHandlers}
+    >
+      <Text style={styles.zoneLabel} numberOfLines={1}>{label}</Text>
+      {selected ? (
+        <>
+          <View style={styles.resizeHandle} {...resizeResponder.panHandlers} />
+          <TouchableOpacity
+            style={styles.delete}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            onPress={() => onDelete(zone.id)}
+          >
+            <Text style={styles.deleteText}>✕</Text>
+          </TouchableOpacity>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
 function friendlyCameraError(failure, fallback) {
   const status = Number(failure?.status ?? 0);
   if (status === 409) return 'La información cambió mientras editabas. Vuelve a cargar la pantalla e inténtalo de nuevo.';
@@ -85,10 +176,11 @@ export default function ShelfZonesScreen({ go }) {
   const [shelfNameDraft, setShelfNameDraft] = useState('');
   const [shelfLocationDraft, setShelfLocationDraft] = useState('');
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [imageSize, setImageSize] = useState(null);
 
   const draftRef = useRef(null);   // { startX, startY, id } mientras se dibuja
-  const dragRef = useRef(null);    // { zoneId, startX, startY, origX, origY } mientras se mueve
-  const resizeRef = useRef(null);  // { zoneId, startX, startY, origW, origH } mientras se redimensiona
+
+
 
   const load = useCallback(async () => {
     if (!branchId || !deviceId) return;
@@ -122,6 +214,13 @@ export default function ShelfZonesScreen({ go }) {
       })));
       setBaseVersion(roiData?.version ?? 0);
       setSnapshot(photo);
+      if (photo?.uri) {
+        Image.getSize(photo.uri, (w, h) => {
+          if (w > 0 && h > 0) setImageSize({ width: w, height: h });
+        }, () => setImageSize(null));
+      } else {
+        setImageSize(null);
+      }
     } catch (failure) {
       setError(friendlyCameraError(failure, 'No pudimos cargar la configuración. Inténtalo de nuevo.'));
     } finally {
@@ -138,56 +237,76 @@ export default function ShelfZonesScreen({ go }) {
     setZones((previous) => previous.map((zone) => (zone.id === id ? { ...zone, ...patch } : zone)));
   }
 
+  // Desplazar una zona usando deltas del gesto (no coordenadas absolutas).
+  function moveZone(id, x, y) {
+    setZones((previous) => previous.map((zone) => (
+      zone.id === id
+        ? { ...zone, x: clamp(x, 0, 1 - zone.w), y: clamp(y, 0, 1 - zone.h) }
+        : zone
+    )));
+  }
+
+  // Redimensionar una zona usando deltas del gesto.
+  function resizeZone(id, w, h) {
+    setZones((previous) => previous.map((zone) => (
+      zone.id === id
+        ? { ...zone, w: clamp(w, MIN_SIDE, 1 - zone.x), h: clamp(h, MIN_SIDE, 1 - zone.y) }
+        : zone
+    )));
+  }
+
+  const imageRect = useMemo(() => {
+    const iw = imageSize?.width || size.width || 1;
+    const ih = imageSize?.height || size.height || 1;
+    const scale = Math.min(size.width / iw, size.height / ih);
+    const dw = iw * scale;
+    const dh = ih * scale;
+    return { x: (size.width - dw) / 2, y: (size.height - dh) / 2, width: dw, height: dh };
+  }, [size, imageSize]);
+
+  // Capa de fondo: solo crea zonas nuevas. Las zonas existentes viven en una
+  // capa superior y gestionan su propio toque, así que aquí el evento siempre
+  // apunta a esta capa y `locationX/locationY` es la posición correcta.
   const startPan = useCallback((event) => {
-    if (size.width === 0 || size.height === 0 || saving || applying) return false;
+    if (imageRect.width === 0 || imageRect.height === 0 || saving || applying) return false;
     const { locationX, locationY } = event.nativeEvent;
-    const x = clamp(locationX / size.width, 0, 1);
-    const y = clamp(locationY / size.height, 0, 1);
-    // ¿Tocó una zona existente? → moverla.
-    const hit = [...zones].reverse().find((z) => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h);
-    if (hit) {
-      setSelected(hit.id);
-      dragRef.current = { zoneId: hit.id, startX: x, startY: y, origX: hit.x, origY: hit.y };
-      return;
-    }
-    // Si no, dibujar una nueva.
+    const x = clamp((locationX - imageRect.x) / imageRect.width, 0, 1);
+    const y = clamp((locationY - imageRect.y) / imageRect.height, 0, 1);
     const zone = { id: newId(), x, y, w: 0, h: 0, productId: null, name: '' };
     draftRef.current = { startX: x, startY: y, id: zone.id };
     setZones((previous) => [...previous, zone]);
     setSelected(zone.id);
-  }, [size, saving, applying, zones]);
+  }, [imageRect, saving, applying]);
 
   const movePan = useCallback((event) => {
-    if (size.width === 0 || size.height === 0) return;
+    const draft = draftRef.current;
+    if (!draft || imageRect.width === 0 || imageRect.height === 0) return;
     const { locationX, locationY } = event.nativeEvent;
-    const x = clamp(locationX / size.width, 0, 1);
-    const y = clamp(locationY / size.height, 0, 1);
-    if (dragRef.current) {
-      const d = dragRef.current;
-      const zone = zones.find((z) => z.id === d.zoneId);
-      if (!zone) return;
-      const nx = clamp(d.origX + (x - d.startX), 0, 1 - zone.w);
-      const ny = clamp(d.origY + (y - d.startY), 0, 1 - zone.h);
-      updateZone(d.zoneId, { x: nx, y: ny });
-      return;
-    }
-    if (draftRef.current) {
-      const d = draftRef.current;
-      const zone = zones.find((z) => z.id === d.id);
-      if (!zone) return;
-      const next = {
-        x: Math.min(d.startX, x),
-        y: Math.min(d.startY, y),
-        w: Math.max(MIN_SIDE, Math.abs(x - d.startX)),
-        h: Math.max(MIN_SIDE, Math.abs(y - d.startY)),
+    const x = clamp((locationX - imageRect.x) / imageRect.width, 0, 1);
+    const y = clamp((locationY - imageRect.y) / imageRect.height, 0, 1);
+    setZones((previous) => previous.map((zone) => {
+      if (zone.id !== draft.id) return zone;
+      return {
+        ...zone,
+        x: Math.min(draft.startX, x),
+        y: Math.min(draft.startY, y),
+        w: Math.max(MIN_SIDE, Math.abs(x - draft.startX)),
+        h: Math.max(MIN_SIDE, Math.abs(y - draft.startY)),
       };
-      updateZone(d.id, next);
-    }
-  }, [size, zones]);
+    }));
+  }, [imageRect]);
 
   const endPan = useCallback(() => {
+    const draft = draftRef.current;
     draftRef.current = null;
-    dragRef.current = null;
+    if (!draft) return;
+    // Un toque sin arrastre crea una zona de tamaño inicial utilizable.
+    setZones((previous) => previous.map((zone) => {
+      if (zone.id !== draft.id || (zone.w >= DEFAULT_SIDE && zone.h >= DEFAULT_SIDE)) return zone;
+      const w = Math.max(MIN_SIDE, DEFAULT_SIDE);
+      const h = Math.max(MIN_SIDE, DEFAULT_SIDE);
+      return { ...zone, x: clamp(zone.x, 0, 1 - w), y: clamp(zone.y, 0, 1 - h), w, h };
+    }));
   }, []);
 
   // eslint-disable-next-line react-hooks/refs
@@ -198,42 +317,14 @@ export default function ShelfZonesScreen({ go }) {
     onPanResponderMove: (e) => movePan(e),
     onPanResponderRelease: () => endPan(),
     onPanResponderTerminate: () => endPan(),
+    onPanResponderTerminationRequest: () => false,
+    onShouldBlockNativeResponder: () => true,
   }), [startPan, movePan, endPan]);
 
   function deleteZone(id) {
     setZones((previous) => previous.filter((zone) => zone.id !== id));
     if (selected === id) setSelected(null);
   }
-
-  function startResize(event, zone) {
-    event.stopPropagation?.();
-    const { locationX, locationY } = event.nativeEvent;
-    // coordenadas relativas al contenedor (el handle está dentro de la zona)
-    resizeRef.current = { zoneId: zone.id, startX: (zone.x * size.width + locationX) / size.width, startY: (zone.y * size.height + locationY) / size.height, origW: zone.w, origH: zone.h };
-  }
-
-  // eslint-disable-next-line react-hooks/refs
-  const resizeResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => {
-      const z = zones.find((zz) => zz.id === selected);
-      if (z) resizeRef.current = { zoneId: z.id, origW: z.w, origH: z.h };
-    },
-    onPanResponderMove: (e, g) => {
-      const r = resizeRef.current;
-      if (!r) return;
-      const zone = zones.find((z) => z.id === r.zoneId);
-      if (!zone) return;
-      const dw = g.dx / size.width;
-      const dh = g.dy / size.height;
-      const w = Math.max(MIN_SIDE, Math.min(1 - zone.x, r.origW + dw));
-      const h = Math.max(MIN_SIDE, Math.min(1 - zone.y, r.origH + dh));
-      updateZone(r.zoneId, { w, h });
-    },
-    onPanResponderRelease: () => { resizeRef.current = null; },
-    onPanResponderTerminate: () => { resizeRef.current = null; },
-  }), [size, zones, selected]);
 
   const validationError = validateZones(zones);
 
@@ -362,33 +453,42 @@ export default function ShelfZonesScreen({ go }) {
       const { width, height } = event.nativeEvent.layout;
       if (width !== size.width || height !== size.height) setSize({ width, height });
     }}>
-      <Image source={{ uri: snapshot.uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
-      <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers}>
+      <Image
+        source={{ uri: snapshot.uri }}
+        style={StyleSheet.absoluteFill}
+        resizeMode="contain"
+        onLoad={(event) => {
+          // El propio Image reporta el tamaño real decodificado: es más fiable
+          // en móvil que Image.getSize con data URI.
+          const source = event?.nativeEvent?.source;
+          if (source?.width > 0 && source?.height > 0) {
+            setImageSize((previous) => (
+              previous?.width === source.width && previous?.height === source.height
+                ? previous
+                : { width: source.width, height: source.height }
+            ));
+          }
+        }}
+      />
+      {/* Fondo: crear zonas nuevas. Es una capa sin hijos, así que el toque
+          siempre se mide contra ella y no contra una zona concreta. */}
+      <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers} />
+      {/* Zonas encima, cada una con su propio toque, arrastre y tirador. */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         {zones.map((zone) => (
-          <View
+          <ZoneBox
             key={zone.id}
-            style={[styles.zone, {
-              left: zone.x * size.width,
-              top: zone.y * size.height,
-              width: Math.max(24, zone.w * size.width),
-              height: Math.max(24, zone.h * size.height),
-              borderColor: selected === zone.id ? C.navy : C.muted,
-              backgroundColor: selected === zone.id ? 'rgba(36,116,67,0.18)' : 'rgba(0,0,0,0.08)',
-            }]}
-          >
-            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSelected(zone.id)} />
-            <Text style={styles.zoneLabel} numberOfLines={1}>
-              {zone.productId ? (products.find((p) => p.id === zone.productId)?.name || 'Producto') : 'Sin producto'}
-            </Text>
-            {selected === zone.id && (
-              <>
-                <TouchableOpacity style={styles.resizeHandle} {...resizeResponder.panHandlers} />
-                <TouchableOpacity style={styles.delete} onPress={() => deleteZone(zone.id)}>
-                  <Text style={styles.deleteText}>✕</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
+            zone={zone}
+            selected={selected === zone.id}
+            imageRect={imageRect}
+            label={zone.productId
+              ? (products.find((p) => p.id === zone.productId)?.name || 'Producto')
+              : 'Sin producto'}
+            onSelect={() => setSelected(zone.id)}
+            onMove={(x, y) => moveZone(zone.id, x, y)}
+            onResize={(w, h) => resizeZone(zone.id, w, h)}
+            onDelete={deleteZone}
+          />
         ))}
       </View>
     </View>
