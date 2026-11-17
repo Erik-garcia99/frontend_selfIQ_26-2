@@ -16,7 +16,9 @@ function RoiOccupancyCard({ branchId, roi, accessToken }) {
       {telemetry.loading ? <ActivityIndicator color={C.navy} accessibilityLabel="Actualizando ocupación" /> : null}
     </View>
     <Text style={styles.copy}>{view.detail}</Text>
-    {view.outdated ? <Text style={styles.warning}>Último valor conocido; no representa una medición nueva.</Text> : null}
+    {view.camMoved ?
+      <Text style={styles.warning}>La medición está detenida hasta recalibrar esta zona.</Text> :
+      view.outdated ? <Text style={styles.warning}>Último valor conocido; no representa una medición nueva.</Text> : null}
     {telemetry.reading?.config_version != null && telemetry.reading?.calibration_version != null ?
       <Text style={styles.meta}>Configuración {telemetry.reading.config_version} · Calibración {telemetry.reading.calibration_version}</Text> : null}
     <Pressable accessibilityRole="button" accessibilityLabel={`Actualizar ocupación de ${roi.name || 'zona'}`}
