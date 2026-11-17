@@ -44,6 +44,29 @@ test('rechaza identidades, porcentajes, versiones y tiempos incompatibles', () =
   }
 });
 
+test('cam_moved se muestra como estado de zona, no como porcentaje dudoso', () => {
+  const data = normalizeRoiOccupancy(reading({
+    cam_moved: true, cam_moved_at: '2026-11-17T04:55:00Z',
+  }), scope);
+  const view = presentation(data);
+  assert.equal(view.label, '—');
+  assert.equal(view.status, 'Cámara movida');
+  assert.equal(view.outdated, true);
+  assert.equal(view.camMoved, true);
+  assert.match(view.detail, /Recalibra/);
+  assert.equal(presentation(reading({ status: 'stale', age_seconds: 124 })).camMoved, undefined);
+});
+
+test('rechaza cam_moved con tipos inválidos', () => {
+  for (const extra of [
+    { cam_moved: 'true' },
+    { cam_moved: true, cam_moved_at: 'invalid' },
+    { cam_moved: true, cam_moved_at: null },
+  ]) {
+    assert.throws(() => normalizeRoiOccupancy(reading(extra), scope));
+  }
+});
+
 test('stale conserva el último valor y no lo presenta como reciente', () => {
   const view = presentation(reading({ status: 'stale', age_seconds: 124 }));
   assert.equal(view.label, '55 %');
