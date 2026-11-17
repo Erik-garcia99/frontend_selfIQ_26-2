@@ -4,6 +4,7 @@ import { Shell, ErrorNotice, Primary, Info, NavRow, useDevices } from './DeviceU
 import { useAuth } from '../../context/AuthContext';
 import { deviceAdapter } from '../../services/deviceAdapter';
 import { colors as C } from '../../theme/colors';
+import RoiOccupancyPanel from './RoiOccupancyPanel';
 
 function photoDate(value) {
   const date = new Date(value);
@@ -138,6 +139,8 @@ function CameraDetail({ go, d, accessToken }) {
         {snapshot ? 'Tomar nueva foto' : 'Tomar foto'}
       </Primary>
     </View>
+
+    {shelf?.id ? <RoiOccupancyPanel key={`${branchId}:${deviceId}:${shelf.id}`} branchId={branchId} shelfId={shelf.id} accessToken={accessToken} /> : null}
 
     <NavRow
       label="Preparar zona"
