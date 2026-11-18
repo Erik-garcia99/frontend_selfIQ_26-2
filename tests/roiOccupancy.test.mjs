@@ -44,6 +44,7 @@ test('rechaza identidades, porcentajes, versiones y tiempos incompatibles', () =
   }
 });
 
+<<<<<<< HEAD
 test('cam_moved se muestra como estado de zona, no como porcentaje dudoso', () => {
   const data = normalizeRoiOccupancy(reading({
     cam_moved: true, cam_moved_at: '2026-11-17T04:55:00Z',
@@ -67,6 +68,8 @@ test('rechaza cam_moved con tipos inválidos', () => {
   }
 });
 
+=======
+>>>>>>> ec85d2f (impelemtnacion de etapa 5 esp32-cam completa, aun faltan unas pruebas que solo serina para mejorar)
 test('stale conserva el último valor y no lo presenta como reciente', () => {
   const view = presentation(reading({ status: 'stale', age_seconds: 124 }));
   assert.equal(view.label, '55 %');
