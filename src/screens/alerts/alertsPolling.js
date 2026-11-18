@@ -1,6 +1,6 @@
 // Un único request en vuelo. Una respuesta posterior a stop nunca llega a UI.
 export function pollAlerts({ load, onData, onError, onBusy,
-  schedule = setTimeout, cancel = clearTimeout, interval = 15000 }) {
+  schedule = setTimeout, cancel = clearTimeout, interval = 3000 }) {
   let active = true;
   let timer;
   async function tick() {

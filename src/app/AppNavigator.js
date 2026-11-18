@@ -48,6 +48,8 @@ import Products from '../screens/devices/ProductsScreen';
 import ShelfZones from '../screens/devices/ShelfZonesScreen';
 import Calibration from '../screens/devices/CalibrationScreen';
 import Diagnostics from '../screens/devices/DiagnosticsScreen';
+import ShelfStates from '../screens/shelf/ShelfStatesScreen';
+import Thresholds from '../screens/shelf/ThresholdsScreen';
 const publicScreens = { login: Login, register: Register, recovery: Recovery };
 const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: Panel, alerts: Alerts, tokens: Tokens, approve: Approve, gateway: Gateway,
   'settings-profile': ProfileSettings, 'settings-notifications': NotificationsSettings, 'settings-security': SecuritySettings, 'settings-logout': Logout,
@@ -58,7 +60,8 @@ const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: 
   'edit-device': EditDevice, 'device-updated': DeviceUpdated, 'delete-device': DeleteDevice,
   'edit-light': EditLight, 'select-shelf': SelectShelf, 'add-light': AddLight, 'test-light': TestLight,
   'light-updated': LightUpdated, 'light-added': LightAdded, products: Products, 'shelf-zones': ShelfZones,
-  calibration: Calibration, 'device-diagnostics': Diagnostics };
+  calibration: Calibration, 'device-diagnostics': Diagnostics,
+  'shelf-states': ShelfStates, thresholds: Thresholds };
 const deviceRoutes = new Set(['gateway', 'devices', 'add-device', 'registered-devices', 'guide', 'preparing-search', 'searching', 'device-found', 'add-camera', 'adding-device', 'device-added', 'no-results', 'search-error', 'confirm-error', 'confirm-device', 'camera-detail', 'aforo-detail', 'edit-aforo', 'aforo-updated', 'edit-device', 'device-updated', 'delete-device', 'edit-light', 'select-shelf', 'add-light', 'test-light', 'light-updated', 'light-added', 'products', 'shelf-zones', 'calibration', 'device-diagnostics']);
 function PublicNavigator() {
   const [route, go] = useState('login'); const Screen = publicScreens[route] || Login;

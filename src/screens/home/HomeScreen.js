@@ -12,6 +12,7 @@ import TemperatureIndicator from '../../components/TemperatureIndicator';
 import { useTemperature } from '../../utils/useTemperature';
 import { useOccupancy } from '../../utils/useOccupancy';
 import { occupancyPresentation } from '../../utils/occupancy';
+import { useShelfStates } from '../../utils/useShelfStates';
 
 function QuickCard({ title, detail, icon, onPress }) {
   return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.homeQuickCard, pressed && { opacity: .78 }]}>
@@ -30,6 +31,10 @@ export default function HomeScreen({ go }) {
   const telemetry = useTemperature(accessToken, branchId);
   const occupancy = useOccupancy(accessToken, branchId);
   const occupancyReading = occupancyPresentation(occupancy);
+  const shelves = useShelfStates({ branchId, accessToken });
+  const attention = (shelves.states || []).filter(s => s.status === 'low' || s.status === 'empty').length;
+  const shelfValue = !branchId ? 'Sin sucursal' : shelves.loading ? 'Consultando…'
+    : shelves.error ? 'Sin conexión' : attention ? `${attention} por revisar` : 'Sin alertas';
 
   useEffect(() => {
     let active = true;
@@ -51,10 +56,14 @@ export default function HomeScreen({ go }) {
 
       <View style={styles.cardsRow}>
         {[
-          ['Estantes', frameIcons.shelves, 'Sin alertas'],
+          ['Estantes', frameIcons.shelves, shelfValue, () => go('shelf-states')],
           ['Inventario', frameIcons.inventory, 'Sin lecturas'],
           ['Sistema', navIcons.settings, apiOnline === null ? 'Revisando…' : apiOnline && branch?.is_online ? 'Operativo' : 'Revisar'],
-        ].map(([label, icon, value]) => <View key={label} style={styles.statusCard}><Image source={icon} style={styles.cardIcon} /><Text style={styles.statusTitle}>{label}</Text><Text style={styles.statusValue}>{value}</Text></View>)}
+        ].map(([label, icon, value, onPress]) => {
+          const card = <><Image source={icon} style={styles.cardIcon} /><Text style={styles.statusTitle}>{label}</Text><Text style={styles.statusValue}>{value}</Text></>;
+          return onPress ? <Pressable key={label} accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} onPress={onPress} style={({ pressed }) => [styles.statusCard, pressed && { opacity: .78 }]}>{card}</Pressable>
+            : <View key={label} style={styles.statusCard}>{card}</View>;
+        })}
       </View>
 
       <Text style={styles.homeSectionLabel}>Acciones rápidas</Text>

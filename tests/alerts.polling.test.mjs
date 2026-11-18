@@ -41,6 +41,17 @@ test('polling reintenta un error sin fabricar un resultado vacío', async () => 
   stop();
 });
 
+test('el intervalo por defecto es el reducido de 3 s (P-04)', async () => {
+  const delays = [];
+  const stop = pollAlerts({
+    load: async () => ({}), onData: () => {}, onError: assert.fail, onBusy: () => {},
+    schedule: (_fn, delay) => { delays.push(delay); }, cancel: () => {},
+  });
+  await flush();
+  stop();
+  assert.deepEqual(delays, [3000]);
+});
+
 test('cancelar antes del primer request no toca la sesión anterior', async () => {
   let called = false;
   const stop = pollAlerts({
