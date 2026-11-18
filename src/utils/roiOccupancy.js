@@ -3,12 +3,9 @@ export function normalizeRoiOccupancy(value, { branchId, roiId }) {
   const invalid = () => { throw new Error('El servidor devolvió una lectura de zona inválida.'); };
   if (!value || value.branch_id !== branchId || value.roi_id !== roiId ||
       !['ok', 'stale', 'no_data'].includes(value.status)) invalid();
-<<<<<<< HEAD
   if ('cam_moved' in value && typeof value.cam_moved !== 'boolean') invalid();
   if (value.cam_moved && (typeof value.cam_moved_at !== 'string' ||
       !Number.isFinite(Date.parse(value.cam_moved_at)))) invalid();
-=======
->>>>>>> ec85d2f (impelemtnacion de etapa 5 esp32-cam completa, aun faltan unas pruebas que solo serina para mejorar)
   if (value.status === 'no_data') {
     if (value.occupancy_pct !== null || value.received_at !== null) invalid();
     return { ...value, occupancy_pct: null };
@@ -30,13 +27,10 @@ export function roiOccupancyPresentation({ reading, loading, error, fetchedAt },
     detail: loading ? 'Consultando la ocupación de esta zona.' : 'Todavía no hay una lectura.',
     outdated: false,
   };
-<<<<<<< HEAD
   if (reading.cam_moved) return {
     label: '—', status: 'Cámara movida', outdated: true, camMoved: true,
     detail: 'La cámara cambió de posición. Recalibra la zona para volver a medir.',
   };
-=======
->>>>>>> ec85d2f (impelemtnacion de etapa 5 esp32-cam completa, aun faltan unas pruebas que solo serina para mejorar)
   if (reading.status === 'no_data') return {
     label: '—', status: 'Sin datos', outdated: false,
     detail: 'No hay lecturas para la configuración y calibración actuales. Revisa que la zona esté preparada y la cámara esté midiendo.',
