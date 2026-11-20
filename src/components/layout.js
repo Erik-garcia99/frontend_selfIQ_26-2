@@ -1,7 +1,7 @@
 import { Image, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { colors as C } from '../theme/colors';
 import { layoutStyles as L } from '../theme/layout';
-import { navIcons } from '../theme/assets';
+import { navIcons, clientNavIcons } from '../theme/assets';
 
 // Primitivas del rediseño. Todo lo que sigue está medido sobre los frames de
 // Figma: contenedor 374, filas de 58, campos de 52/73, radios 16/20/24.
@@ -14,9 +14,28 @@ export function BottomNav({ go, active }) {
     </Pressable>)}</View>;
 }
 
-export function Screen({ children, go, active }) {
+export function ClientBottomNav({ go, active }) {
+  const tabs = [
+    ['home', 'Inicio'],
+    ['search', 'Buscar'],
+    ['map', 'Mapa'],
+    ['purchases', 'Compras'],
+    ['profile', 'Perfil'],
+  ];
+  return <View style={L.nav}>{tabs.map(([id, label]) =>
+    <Pressable key={id} accessibilityRole="button" accessibilityLabel={label} onPress={() => go?.(id)} style={L.navItem}>
+      <Image source={clientNavIcons[id]} style={[L.navIcon, { tintColor: active === id ? C.navActive : C.navIdle }]} />
+      <Text style={[L.navText, active === id && L.navTextActive]}>{label}</Text>
+    </Pressable>)}</View>;
+}
+
+export function Screen({ children, go, active, nav: Nav = BottomNav }) {
   return <View style={L.screen}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={L.scroll}>{children}</ScrollView>
-    {go ? <BottomNav go={go} active={active} /> : null}</View>;
+    {go && Nav ? <Nav go={go} active={active} /> : null}</View>;
+}
+
+export function ClientScreen({ children, go, active }) {
+  return <Screen go={go} active={active} nav={ClientBottomNav}>{children}</Screen>;
 }
 
 export function AuthScreen({ children }) {
@@ -88,4 +107,14 @@ export function Info({ title, children }) {
 export function LinkButton({ children, onPress, align = 'center' }) {
   return <Pressable accessibilityRole="link" onPress={onPress} style={align === 'center' ? L.linkWrap : undefined}>
     <Text style={[L.link, align === 'right' && { textAlign: 'right' }]}>{children}</Text></Pressable>;
+}
+
+// Selector de dos o más opciones (p. ej. Cliente / Empleado en el registro).
+export function ChoiceRow({ options, value, onChange, disabled = false }) {
+  return <View style={L.choiceRow}>{options.map(([id, label]) =>
+    <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: value === id, disabled }}
+      disabled={disabled} onPress={() => onChange?.(id)}
+      style={({ pressed }) => [L.choice, value === id && L.choiceActive, disabled && { opacity: .55 }, pressed && { opacity: .8 }]}>
+      <Text style={[L.choiceText, value === id && L.choiceTextActive]}>{label}</Text>
+    </Pressable>)}</View>;
 }

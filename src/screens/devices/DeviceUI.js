@@ -43,7 +43,11 @@ export function useSave(go) {
     try { const result = await d.mutate(operation, payload); if (!result?.id) throw new Error('missing confirmation');
        if (operation === 'updateDevice') d.selectDevice(result);
        d.setResult(result); go(destination);
-    } catch { setError('No pudimos confirmar los cambios. Revisa la información guardada antes de intentarlo de nuevo.'); }
+    } catch (failure) {
+      setError(failure?.status === 409
+        ? 'Esa luz está ocupada por otra guía. Espera a que termine y vuelve a guardar.'
+        : 'No pudimos confirmar los cambios. Revisa la información guardada antes de intentarlo de nuevo.');
+    }
     finally { setBusy(false); }
   }
   return { busy, error, save };
