@@ -1,7 +1,7 @@
 // Integration boundary: install the adapter after the server contract is agreed.
 // Never synthesize devices, telemetry, confirmations or successful saves here.
 let adapter = null;
-export const LIGHT_LIMIT = 10;
+export const LIGHT_LIMIT = 8;
 export function configureDeviceAdapter(value) { adapter = value; }
 export async function deviceRequest(operation, context, payload = {}) {
   if (!context.branchId) throw new Error('Tu cuenta necesita una sucursal asignada para administrar dispositivos.');
@@ -9,7 +9,7 @@ export async function deviceRequest(operation, context, payload = {}) {
     const error = new Error('Esta función todavía no está disponible. Inténtalo más tarde.'); error.code = 'NOT_AVAILABLE'; throw error;
   }
   const result = await adapter[operation]({ ...payload, ...context });
-  if (['listGateways', 'listDevices', 'listShelves', 'listLightChannels', 'listProducts'].includes(operation)) {
+  if (['listGateways', 'listDevices', 'listShelves', 'listLightChannels', 'listProducts', 'listShelfProducts', 'listGuideAssociations'].includes(operation)) {
     if (!Array.isArray(result) || result.some(item => item?.id == null)) throw new Error('Invalid list response');
   }
   if (['getGateway', 'updateGateway', 'getGuide', 'getDevice', 'registerDevice', 'updateDevice', 'addLight', 'updateLight', 'startDiscovery', 'createProduct', 'linkShelf', 'createShelf'].includes(operation) && result?.id == null) {

@@ -13,7 +13,7 @@ assert.equal(service.validLight({ name: ' ', shelfId: 'shelf', channel: 0 }), fa
 assert.equal(service.validLight({ name: 'Luz', shelfId: 'shelf', channel: 0 }), true);
 assert.equal(service.validLight({ name: 'Luz', shelfId: 'shelf' }), false);
 assert.equal(service.statusLabel({}), 'Sin información de conexión');
-assert.equal(service.LIGHT_LIMIT, 10);
+assert.equal(service.LIGHT_LIMIT, 8);
 service.configureDeviceAdapter({
   listProducts: async () => [{ id: 'p1', sku: 'SKU-1', name: 'Agua' }],
   createProduct: async () => ({ id: 'p2', sku: 'SKU-2', name: 'Pan' }),

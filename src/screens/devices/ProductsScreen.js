@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Shell, ErrorNotice, LoadState, useData, useDevices, FieldCard, Primary, Info, SectionLabel } from './DeviceUI';
 import { describeError } from '../../utils/errorMessages';
+import { useAuth } from '../../context/AuthContext';
+import { canManage } from '../../utils/validation';
 import { colors as C } from '../../theme/colors';
 
 function ProductRow({ product }) {
@@ -18,6 +20,7 @@ function ProductRow({ product }) {
 
 export default function ProductsScreen({ go }) {
   const d = useDevices();
+  const { user } = useAuth();
   const state = useData('listProducts');
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -61,6 +64,11 @@ export default function ProductsScreen({ go }) {
       autoCapitalize="none"
       style={styles.search}
     />
+
+    {canManage(user) ? <Primary variant="light" onPress={() => {
+      d.setDraft({ controlBack: 'products' });
+      go('test-product-light');
+    }}>Control de LED · ON / OFF</Primary> : null}
 
     {saved ? <Info title="Producto creado">{saved}</Info> : null}
     <ErrorNotice message={error} />
