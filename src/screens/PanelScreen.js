@@ -1,6 +1,7 @@
 import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { Nav } from '../components/ui';
 import BranchSwitcher from '../components/BranchSwitcher';
+import { useDevices } from '../context/DeviceContext';
 import { useAuth } from '../context/AuthContext';
 import { canManage, canCreateBranch } from '../utils/validation';
 import { navIcons, frameIcons } from '../theme/assets';
@@ -17,6 +18,7 @@ function PanelTile({ title, detail, icon, onPress }) {
 
 export default function PanelScreen({ go }) {
   const { user } = useAuth();
+  const d = useDevices();
   return <View style={styles.appPage}>
     <ScrollView contentContainerStyle={styles.panelContent}>
       <View style={styles.homeHeader}>
@@ -25,6 +27,10 @@ export default function PanelScreen({ go }) {
       </View>
 
       <View style={styles.panelHero}><Text style={styles.panelHeroTitle}>Gestiona tu sucursal</Text><Text style={styles.panelHeroText}>Accede a las herramientas de operación sin mezclar configuración, personal y dispositivos en una sola lista.</Text></View>
+      <View style={styles.panelGrid}>
+        <PanelTile title="Control de LED" detail="Productos asociados · ON / OFF" icon={frameIcons.shelves}
+          onPress={() => { d.setDraft({ controlBack: 'panel' }); go('test-product-light'); }} />
+      </View>
 
       {canManage(user) ? <>
         <Text style={styles.homeSectionLabel}>Operación</Text>

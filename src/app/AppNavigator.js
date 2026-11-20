@@ -23,6 +23,7 @@ import Devices from '../screens/devices/DevicesScreen';
 import AddDevice from '../screens/devices/AddDeviceScreen';
 import RegisteredDevices from '../screens/devices/RegisteredDevicesScreen';
 import Guide from '../screens/devices/GuideScreen';
+import GuideNode from '../screens/devices/GuideNodeScreen';
 import PreparingSearch from '../screens/devices/PreparingSearchScreen';
 import Searching from '../screens/devices/SearchingScreen';
 import DeviceFound from '../screens/devices/DeviceFoundScreen';
@@ -45,6 +46,8 @@ import TestLight from '../screens/devices/TestLightScreen';
 import LightUpdated from '../screens/devices/LightUpdatedScreen';
 import LightAdded from '../screens/devices/LightAddedScreen';
 import Products from '../screens/devices/ProductsScreen';
+import TestProductLight from '../screens/devices/TestProductLightScreen';
+import GuideProducts from '../screens/devices/GuideProductsScreen';
 import ShelfZones from '../screens/devices/ShelfZonesScreen';
 import Calibration from '../screens/devices/CalibrationScreen';
 import Diagnostics from '../screens/devices/DiagnosticsScreen';
@@ -68,16 +71,17 @@ const customerScreens = {
 
 const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: Panel, alerts: Alerts, tokens: Tokens, approve: Approve, gateway: Gateway,
   'settings-profile': ProfileSettings, 'settings-notifications': NotificationsSettings, 'settings-security': SecuritySettings, 'settings-logout': Logout,
-  'confirm-device': ConfirmDevice, 'camera-detail': CameraDetail, devices: Devices, 'add-device': AddDevice, 'registered-devices': RegisteredDevices, guide: Guide,
+  'confirm-device': ConfirmDevice, 'camera-detail': CameraDetail, devices: Devices, 'add-device': AddDevice, 'registered-devices': RegisteredDevices, guide: GuideNode, 'guide-old': Guide,
   'preparing-search': PreparingSearch, searching: Searching, 'device-found': DeviceFound, 'add-camera': AddCamera,
   'adding-device': AddingDevice, 'device-added': DeviceAdded, 'no-results': NoResults, 'search-error': SearchError,
   'confirm-error': ConfirmError, 'aforo-detail': AforoDetail, 'edit-aforo': EditAforo, 'aforo-updated': AforoUpdated,
   'edit-device': EditDevice, 'device-updated': DeviceUpdated, 'delete-device': DeleteDevice,
   'edit-light': EditLight, 'select-shelf': SelectShelf, 'add-light': AddLight, 'test-light': TestLight,
-  'light-updated': LightUpdated, 'light-added': LightAdded, products: Products, 'shelf-zones': ShelfZones,
+  'light-updated': LightUpdated, 'light-added': LightAdded, products: Products,
+  'test-product-light': TestProductLight, 'guide-products': GuideProducts, 'shelf-zones': ShelfZones,
   calibration: Calibration, 'device-diagnostics': Diagnostics };
 
-const deviceRoutes = new Set(['gateway', 'devices', 'add-device', 'registered-devices', 'guide', 'preparing-search', 'searching', 'device-found', 'add-camera', 'adding-device', 'device-added', 'no-results', 'search-error', 'confirm-error', 'confirm-device', 'camera-detail', 'aforo-detail', 'edit-aforo', 'aforo-updated', 'edit-device', 'device-updated', 'delete-device', 'edit-light', 'select-shelf', 'add-light', 'test-light', 'light-updated', 'light-added', 'products', 'shelf-zones', 'calibration', 'device-diagnostics']);
+const deviceRoutes = new Set(['gateway', 'devices', 'add-device', 'registered-devices', 'guide', 'preparing-search', 'searching', 'device-found', 'add-camera', 'adding-device', 'device-added', 'no-results', 'search-error', 'confirm-error', 'confirm-device', 'camera-detail', 'aforo-detail', 'edit-aforo', 'aforo-updated', 'edit-device', 'device-updated', 'delete-device', 'edit-light', 'select-shelf', 'add-light', 'test-light', 'light-updated', 'light-added', 'products', 'test-product-light', 'guide-products', 'shelf-zones', 'calibration', 'device-diagnostics']);
 
 function PublicNavigator() {
   const [route, go] = useState('login');
@@ -99,10 +103,10 @@ function StaffNavigator() {
   const [route, setRoute] = useState('home');
   const go = (next) => {
     if (next === 'branch' && !canCreateBranch(user)) return;
-    if ((['tokens', 'approve'].includes(next) || deviceRoutes.has(next)) && !canManage(user)) return;
+    if (next !== 'test-product-light' && (['tokens', 'approve'].includes(next) || deviceRoutes.has(next)) && !canManage(user)) return;
     setRoute(privateScreens[next] ? next : 'home');
   };
-  const allowedRoute = (route === 'branch' && !canCreateBranch(user)) || ((['tokens', 'approve'].includes(route) || deviceRoutes.has(route)) && !canManage(user)) ? 'home' : route;
+  const allowedRoute = (route === 'branch' && !canCreateBranch(user)) || (route !== 'test-product-light' && (['tokens', 'approve'].includes(route) || deviceRoutes.has(route)) && !canManage(user)) ? 'home' : route;
   const Screen = privateScreens[allowedRoute] || Home;
   return <Screen key={allowedRoute} go={go} />;
 }

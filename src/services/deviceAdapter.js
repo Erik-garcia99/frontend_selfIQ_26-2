@@ -277,10 +277,20 @@ export const deviceAdapter = {
 
   async listLightChannels({ branchId, deviceId, accessToken }) {
     const rows = await apiRequest(`${devicePath(branchId, deviceId)}/light-channels`, { accessToken });
-    return list(rows).map((channel) => ({
+    const channels = list(rows);
+    // Sin capacidades declaradas por el firmware, el backend devuelve [].
+    // Se muestran los 8 canales lógicos del hardware actual;
+    // la guía real no se activará hasta que el nodo informe su capacidad.
+    if (!channels.length) {
+      return Array.from({ length: 8 }, (_, id) => ({
+        id, label: `Luz ${id + 1}`, available: true, declared: false,
+      }));
+    }
+    return channels.map((channel) => ({
       id: channel.id,
       label: channel.label,
       available: channel.available === true,
+      declared: true,
     }));
   },
 
@@ -295,6 +305,13 @@ export const deviceAdapter = {
 
   async listProducts({ branchId, accessToken }) {
     const rows = await apiRequest(`${branchPath(branchId)}/products?limit=100`, { accessToken });
+    return list(rows).map(normalizeProduct);
+  },
+
+  async listShelfProducts({ branchId, shelfId, accessToken }) {
+    if (!shelfId) return [];
+    const rows = await apiRequest(
+      `${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/products`, { accessToken });
     return list(rows).map(normalizeProduct);
   },
 
@@ -333,6 +350,40 @@ export const deviceAdapter = {
     return confirmed(normalizeLight(result), 'Los cambios de la luz no fueron confirmados.');
   },
 
+  async listGuideAssociations({ branchId, accessToken }) {
+    const rows = await apiRequest(`${branchPath(branchId)}/guide-associations`, { accessToken });
+    return list(rows).map(row => ({
+      id: row.productId,
+      nodeId: row.nodeId,
+      guidePointId: row.guidePointId,
+      lightName: row.lightName,
+      channel: row.channel,
+      shelfId: row.shelfId,
+      shelfName: row.shelfName,
+      productId: row.productId,
+      productName: row.productName,
+      sku: row.sku,
+    }));
+  },
+
+  async assignGuideProduct({ branchId, productId, guidePointId, replaceProductId, accessToken }) {
+    const result = await apiRequest(`${branchPath(branchId)}/guide-associations`, {
+      method: 'POST',
+      accessToken,
+      body: { product_id: productId, guide_point_id: guidePointId,
+        ...(replaceProductId ? { replace_product_id: replaceProductId } : {}) },
+    });
+    if (!result?.productId) throw new ApiError('La asociación no fue confirmada.', 502);
+    return result;
+  },
+
+  async unassignGuideProduct({ branchId, productId, accessToken }) {
+    await apiRequest(`${branchPath(branchId)}/guide-associations/${encodeURIComponent(productId)}`, {
+      method: 'DELETE', accessToken,
+    });
+    return { deleted: true };
+  },
+
   async testLight({ branchId, deviceId, channel, durationSeconds, accessToken }) {
     const result = await apiRequest(`${devicePath(branchId, deviceId)}/lights/test`, {
       method: 'POST',
@@ -340,7 +391,15 @@ export const deviceAdapter = {
       timeout: 70000,
       body: { channel, duration_seconds: durationSeconds },
     });
-    if (result?.confirmed !== true) throw new ApiError('El gateway no confirmó la prueba.', 502);
-    return { confirmed: true, channel: result.channel ?? channel };
+    if (!result || !['applied', 'rejected', 'unknown'].includes(result.status)) {
+      throw new ApiError('El gateway no devolvió un resultado válido de la prueba.', 502);
+    }
+    return {
+      status: result.status,
+      light: result.light ?? 'unknown',
+      channel: result.channel ?? channel,
+      durationSeconds: result.durationSeconds ?? durationSeconds,
+      expiresInSeconds: result.expiresInSeconds ?? durationSeconds,
+    };
   },
 };
