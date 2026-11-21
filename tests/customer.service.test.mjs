@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 process.env.EXPO_PUBLIC_API_URL = 'https://example.invalid';
-const { getCustomerBranches, getCustomerHome } = await import('../src/services/customerService.js');
+const { getCustomerBranches, getCustomerHome, getCustomerCategories, getCustomerProducts, getCustomerShelves } = await import('../src/services/customerService.js');
 
 test('getCustomerBranches usa HTTP compartido con bearer y parámetros codificados', async () => {
   const original = globalThis.fetch;
@@ -60,6 +60,49 @@ test('getCustomerHome codifica branch_id y consulta aforo de cliente', async () 
 test('getCustomerHome rechaza llamada sin branchId', async () => {
   await assert.rejects(
     () => getCustomerHome('test-token', null),
+    (err) => err.message.includes('Se requiere un identificador de sucursal')
+  );
+});
+
+test('getCustomerCategories consulta categorías por sucursal', async () => {
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, status: 200, text: async () => '{"categories":["Bebidas","Lácteos"]}' };
+  };
+  try {
+    const data = await getCustomerCategories('test-token', 'b-123');
+    assert.equal(calls[0].url, 'https://example.invalid/customer/branches/b-123/categories');
+    assert.deepEqual(data.categories, ['Bebidas', 'Lácteos']);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('getCustomerShelves consulta estantes por sucursal', async () => {
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, status: 200, text: async () => '{"items":[],"total":0,"page":1,"page_size":5,"total_pages":1}' };
+  };
+  try {
+    await getCustomerShelves('test-token', 'b-123', { page: 1, pageSize: 5 });
+    const { url, options } = calls[0];
+    assert.ok(url.includes('/customer/branches/b-123/shelves?'));
+    const parsed = new URL(url);
+    assert.equal(parsed.searchParams.get('page'), '1');
+    assert.equal(parsed.searchParams.get('page_size'), '5');
+    assert.equal(options.headers.Authorization, 'Bearer test-token');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('getCustomerShelves rechaza llamada sin branchId', async () => {
+  await assert.rejects(
+    () => getCustomerShelves('test-token', null),
     (err) => err.message.includes('Se requiere un identificador de sucursal')
   );
 });

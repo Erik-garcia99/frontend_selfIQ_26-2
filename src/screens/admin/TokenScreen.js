@@ -3,19 +3,33 @@ import { Text, View } from 'react-native';
 import { Page, Card, Field, Button, Message, TokenModal } from '../../components/ui';
 import { FeedbackDialog } from '../../components/FeedbackDialog';
 import { issueBusinessToken, issueBranchToken } from '../../services/branchService';
+import { issueCustomerOrgCode } from '../../services/settingsService';
 import { useAuth } from '../../context/AuthContext';
 import { useDevices } from '../../context/DeviceContext';
 import { useAsyncAction } from '../../utils/useAsyncAction';
 import { describeError } from '../../utils/errorMessages';
-import { isSuperuser, isUuid } from '../../utils/validation';
+import { isSuperuser, isUuid, canManageCustomerOrgCode } from '../../utils/validation';
 
 export default function TokenScreen({ go }) {
   const { user, accessToken } = useAuth();
   const { branchId } = useDevices(); const [mode, setMode] = useState('branch');
   const [id, setId] = useState(branchId || user?.branch_id || ''); const [confirmed, setConfirmed] = useState(false);
   const [issued, setIssued] = useState(null); const [feedback, setFeedback] = useState(null);
+  const [orgCode, setOrgCode] = useState(null);
   const task = useAsyncAction();
   const changeMode = (next) => { setMode(next); setId(next === 'branch' ? branchId || user?.branch_id || '' : user?.organization_id || ''); setConfirmed(false); task.setError(''); };
+  const generateOrgCode = async () => {
+    const orgId = user?.organization_id;
+    if (!orgId) return task.setError('No hay organización asociada.');
+    const result = await task.run(() => issueCustomerOrgCode(orgId, accessToken));
+    if (!result) {
+      const info = describeError(task.getFailure());
+      task.setError('');
+      return setFeedback({ variant: 'error', ...info, actionLabel: 'Entendido', onClose: () => setFeedback(null) });
+    }
+    // result.message contains code; extract
+    setOrgCode(result.message);
+  };
   const submit = async () => {
     if (!isUuid(id)) return task.setError('Escribe un ID válido.');
     if (!confirmed) { setConfirmed(true); return; }
@@ -43,6 +57,22 @@ export default function TokenScreen({ go }) {
     <Message error={task.error} /><Button loading={task.loading} onPress={submit}>{confirmed ? 'Confirmar emisión y reemplazo' : 'Generar token'}</Button>
     {confirmed && <View style={{ marginTop: 12 }}><Button disabled={task.loading} dark={false} onPress={() => setConfirmed(false)}>Cancelar</Button></View>}
   </Card><TokenModal issued={issued} onSaved={() => setIssued(null)} />
+  {canManageCustomerOrgCode(user) ? (
+    <Card>
+      <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>Código de organización para clientes</Text>
+      <Text style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>
+        Genera un código que los clientes usan al registrarse para quedar asociados a tu organización.
+      </Text>
+      <Button disabled={task.loading} onPress={generateOrgCode}>
+        {task.loading ? 'Generando…' : 'Generar código'}
+      </Button>
+      {orgCode ? (
+        <View style={{ marginTop: 12, padding: 12, backgroundColor: '#f0f0f0', borderRadius: 8 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', textAlign: 'center' }}>{orgCode.replace('Código de organización generado: ', '')}</Text>
+        </View>
+      ) : null}
+    </Card>
+  ) : null}
   <FeedbackDialog visible={Boolean(feedback)} variant={feedback?.variant} title={feedback?.title} message={feedback?.message}
     code={feedback?.code} hint={feedback?.hint} actionLabel={feedback?.actionLabel} onClose={feedback?.onClose} /></Page>;
 }

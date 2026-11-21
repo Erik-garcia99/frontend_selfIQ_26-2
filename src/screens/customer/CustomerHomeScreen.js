@@ -37,12 +37,12 @@ const AFORO_CONFIG = {
   },
 };
 
-export default function CustomerHomeScreen({ go }) {
+export default function CustomerHomeScreen({ go, back }) {
   const { user, accessToken } = useAuth();
   const firstName = user?.first_name || 'Cliente';
 
   const [branches, setBranches] = useState([]);
-  const [selectedBranch, setSelectedBranch] = useState(null);
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [selectingBranch, setSelectingBranch] = useState(false);
 
@@ -50,27 +50,30 @@ export default function CustomerHomeScreen({ go }) {
   const [loadingAforo, setLoadingAforo] = useState(false);
   const [error, setError] = useState(null);
 
-  // Cargar sucursales del cliente
-  const loadBranches = useCallback(async () => {
+  // Cargar sucursales del cliente (solo una vez por sesión de usuario)
+  useEffect(() => {
     if (!accessToken) return;
+    let isCurrent = true;
     setLoadingBranches(true);
-    setError(null);
-    try {
-      const data = await getCustomerBranches(accessToken, { page: 1, pageSize: 5 });
-      const items = data.items || [];
-      setBranches(items);
-      if (items.length === 1) {
-        setSelectedBranch(items[0]);
-      } else if (items.length > 1 && !selectedBranch) {
-        // Seleccionar la primera por defecto o pedir elegir
-        setSelectedBranch(items[0]);
-      }
-    } catch (err) {
-      setError(err.message || 'No se pudieron cargar las sucursales.');
-    } finally {
-      setLoadingBranches(false);
-    }
-  }, [accessToken, selectedBranch]);
+    getCustomerBranches(accessToken, { page: 1, pageSize: 5 })
+      .then((data) => {
+        if (!isCurrent) return;
+        const items = data.items || [];
+        setBranches(items);
+        if (items.length > 0) {
+          setSelectedBranchId((prev) => prev || items[0].id);
+        }
+      })
+      .catch((err) => {
+        if (!isCurrent) return;
+        setError(err.message || 'No se pudieron cargar las sucursales.');
+      })
+      .finally(() => {
+        if (isCurrent) setLoadingBranches(false);
+      });
+
+    return () => { isCurrent = false; };
+  }, [accessToken]);
 
   // Cargar aforo de la sucursal seleccionada
   const loadAforo = useCallback(async (branchId) => {
@@ -88,14 +91,12 @@ export default function CustomerHomeScreen({ go }) {
   }, [accessToken]);
 
   useEffect(() => {
-    loadBranches();
-  }, [loadBranches]);
-
-  useEffect(() => {
-    if (selectedBranch?.id) {
-      loadAforo(selectedBranch.id);
+    if (selectedBranchId) {
+      loadAforo(selectedBranchId);
     }
-  }, [selectedBranch, loadAforo]);
+  }, [selectedBranchId, loadAforo]);
+
+  const selectedBranch = branches.find((b) => b.id === selectedBranchId) || branches[0] || null;
 
   // Determinar nivel de aforo para presentación
   const levelKey = (aforo && aforo.status === 'ok' && aforo.occupancy_level)
@@ -127,7 +128,7 @@ export default function CustomerHomeScreen({ go }) {
               <Pressable
                 key={b.id}
                 onPress={() => {
-                  setSelectedBranch(b);
+                  setSelectedBranchId(b.id);
                   setSelectingBranch(false);
                 }}
                 style={({ pressed }) => [
@@ -187,7 +188,7 @@ export default function CustomerHomeScreen({ go }) {
             <Text style={L.cardText}>{error}</Text>
             <Primary
               variant="light"
-              onPress={() => selectedBranch?.id && loadAforo(selectedBranch.id)}
+              onPress={() => selectedBranchId && loadAforo(selectedBranchId)}
             >
               Reintentar
             </Primary>
@@ -237,7 +238,7 @@ export default function CustomerHomeScreen({ go }) {
 
             <View style={{ marginTop: 14 }}>
               <Pressable
-                onPress={() => loadAforo(selectedBranch.id)}
+                onPress={() => selectedBranchId && loadAforo(selectedBranchId)}
                 style={styles.refreshButton}
                 accessibilityRole="button"
                 accessibilityLabel="Actualizar aforo"

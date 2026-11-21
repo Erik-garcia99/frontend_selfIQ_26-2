@@ -19,8 +19,8 @@ const PREFERENCES_PATH = '/auth/me/preferences';
 
 export const updateProfile = (payload, accessToken) => apiRequest(PROFILE_PATH, { method: 'PATCH', body: payload, accessToken });
 
-export const changePassword = (currentPassword, newPassword, accessToken) =>
-  apiRequest(PASSWORD_PATH, { method: 'POST', body: { current_password: currentPassword, new_password: newPassword }, accessToken });
+export const issueCustomerOrgCode = (organizationId, accessToken) =>
+  apiRequest(`/organizations/${encodeURIComponent(organizationId)}/customer-code`, { method: 'POST', accessToken });
 
 const fromPreferencesApi = (data) => ({
   lowStock: data.low_stock,
