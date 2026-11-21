@@ -46,6 +46,7 @@ import TestLight from '../screens/devices/TestLightScreen';
 import LightUpdated from '../screens/devices/LightUpdatedScreen';
 import LightAdded from '../screens/devices/LightAddedScreen';
 import Products from '../screens/devices/ProductsScreen';
+import Shelves from '../screens/devices/ShelvesScreen';
 import TestProductLight from '../screens/devices/TestProductLightScreen';
 import GuideProducts from '../screens/devices/GuideProductsScreen';
 import ShelfZones from '../screens/devices/ShelfZonesScreen';
@@ -77,11 +78,11 @@ const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: 
   'confirm-error': ConfirmError, 'aforo-detail': AforoDetail, 'edit-aforo': EditAforo, 'aforo-updated': AforoUpdated,
   'edit-device': EditDevice, 'device-updated': DeviceUpdated, 'delete-device': DeleteDevice,
   'edit-light': EditLight, 'select-shelf': SelectShelf, 'add-light': AddLight, 'test-light': TestLight,
-  'light-updated': LightUpdated, 'light-added': LightAdded, products: Products,
+  'light-updated': LightUpdated, 'light-added': LightAdded, products: Products, shelves: Shelves,
   'test-product-light': TestProductLight, 'guide-products': GuideProducts, 'shelf-zones': ShelfZones,
   calibration: Calibration, 'device-diagnostics': Diagnostics };
 
-const deviceRoutes = new Set(['gateway', 'devices', 'add-device', 'registered-devices', 'guide', 'preparing-search', 'searching', 'device-found', 'add-camera', 'adding-device', 'device-added', 'no-results', 'search-error', 'confirm-error', 'confirm-device', 'camera-detail', 'aforo-detail', 'edit-aforo', 'aforo-updated', 'edit-device', 'device-updated', 'delete-device', 'edit-light', 'select-shelf', 'add-light', 'test-light', 'light-updated', 'light-added', 'products', 'test-product-light', 'guide-products', 'shelf-zones', 'calibration', 'device-diagnostics']);
+const deviceRoutes = new Set(['gateway', 'devices', 'add-device', 'registered-devices', 'guide', 'preparing-search', 'searching', 'device-found', 'add-camera', 'adding-device', 'device-added', 'no-results', 'search-error', 'confirm-error', 'confirm-device', 'camera-detail', 'aforo-detail', 'edit-aforo', 'aforo-updated', 'edit-device', 'device-updated', 'delete-device', 'edit-light', 'select-shelf', 'add-light', 'test-light', 'light-updated', 'light-added', 'products', 'shelves', 'test-product-light', 'guide-products', 'shelf-zones', 'calibration', 'device-diagnostics']);
 
 function PublicNavigator() {
   const [route, go] = useState('login');

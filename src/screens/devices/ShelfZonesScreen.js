@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Modal, PanResponder, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Shell, ErrorNotice, Primary, Info, NavRow, useDevices } from './DeviceUI';
+import { Shell, ErrorNotice, LoadState, Primary, Info, NavRow, SectionLabel, useData, useDevices } from './DeviceUI';
 import { useAuth } from '../../context/AuthContext';
 import { deviceAdapter } from '../../services/deviceAdapter';
 import { colors as C } from '../../theme/colors';
@@ -154,6 +154,7 @@ function friendlyCameraError(failure, fallback) {
 
 export default function ShelfZonesScreen({ go }) {
   const d = useDevices();
+  const shelvesState = useData('listShelves');
   const { accessToken } = useAuth();
   const device = d.device;
   const branchId = d.branchId;
@@ -232,6 +233,16 @@ export default function ShelfZonesScreen({ go }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
+
+  async function linkShelf(shelfId) {
+    setError('');
+    try {
+      const updated = await deviceAdapter.linkShelf({ branchId, deviceId, shelfId, accessToken });
+      if (updated?.id) { setShelf(updated); await load(); }
+    } catch (failure) {
+      setError(friendlyCameraError(failure, 'No pudimos vincular la repisa. Revisa que tenga sus productos configurados.'));
+    }
+  }
 
   function updateZone(id, patch) {
     setZones((previous) => previous.map((zone) => (zone.id === id ? { ...zone, ...patch } : zone)));
@@ -411,14 +422,15 @@ export default function ShelfZonesScreen({ go }) {
 
   if (!shelf) return <Shell go={go} title="Configurar zonas" back="camera-detail">
     <Info title="Esta cámara no tiene repisa asignada">
-      Primero crea la repisa que vas a monitorear. Después podrás marcar sus zonas sobre una foto.
+      Crea la repisa en Estantes, asígnale productos y configura su orientación y medidas en Productos. Después vuelve aquí y selecciónala.
     </Info>
-    <Primary onPress={async () => {
-      try {
-        const created = await deviceAdapter.createShelf({ branchId, deviceId, name: 'Repisa principal', accessToken });
-        if (created?.id) { setShelf(created); await load(); }
-      } catch (failure) { setError(friendlyCameraError(failure, 'No pudimos crear la repisa. Inténtalo de nuevo.')); }
-    }}>Crear repisa</Primary>
+    <Primary variant="light" onPress={() => go('shelves')}>Ir a Estantes</Primary>
+    <SectionLabel>Repisas disponibles para vincular</SectionLabel>
+    <LoadState state={shelvesState}>
+      {(shelvesState.data || []).map(item => <NavRow key={item.id} label={item.name}
+        detail={item.location || 'Sin ubicación'} onPress={() => linkShelf(item.id)} />)}
+      {!(shelvesState.data || []).length ? <Info>No hay repisas todavía. Créala primero en Estantes.</Info> : null}
+    </LoadState>
     <ErrorNotice message={error} />
   </Shell>;
 
@@ -437,8 +449,14 @@ export default function ShelfZonesScreen({ go }) {
   </Shell>;
 
   const selectedZone = zones.find((zone) => zone.id === selected) || null;
+  const productsById = new Map((products || []).map(product => [product.id, product]));
+  const missingPhysical = zones.filter(zone => zone.productId && !productsById.get(zone.productId)?.physicalConfigured);
 
   return <Shell go={go} title="Configurar zonas" subtitle={shelf?.name ? `Repisa: ${shelf.name}` : undefined} back="camera-detail" busy={saving || applying}>
+    {missingPhysical.length > 0 ? <Info title="Configura los productos antes de calibrar">
+      Hay zonas con productos sin orientación ni medidas físicas. Ajusta esos datos en Productos para que la calibración use referencias reales.
+      <Primary variant="light" onPress={() => go('products')}>Ir a Productos</Primary>
+    </Info> : null}
     {shelf ? <TouchableOpacity style={styles.editShelfButton} onPress={() => { setShelfNameDraft(shelf.name || ''); setShelfLocationDraft(shelf.location || ''); setEditingShelf(true); }}>
       <Text style={styles.editShelfText}>Editar nombre y ubicación de la repisa</Text>
     </TouchableOpacity> : null}

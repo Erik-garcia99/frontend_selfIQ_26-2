@@ -37,6 +37,7 @@ export default function PanelScreen({ go }) {
         <View style={styles.panelGrid}>
           <PanelTile title="Dispositivos" detail="Equipos, búsqueda y configuración." icon={navIcons.settings} onPress={() => go('devices')} />
           <PanelTile title="Productos" detail="Catálogo usado por estantes y cámaras." icon={frameIcons.inventory} onPress={() => go('products')} />
+          <PanelTile title="Estantes" detail="Crea repisas y asigna productos." icon={frameIcons.shelves} onPress={() => go('shelves')} />
         </View>
 
         <Text style={styles.homeSectionLabel}>Personal y acceso</Text>

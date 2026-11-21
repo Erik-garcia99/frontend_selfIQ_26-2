@@ -43,6 +43,11 @@ function normalizeProduct(value = {}) {
   };
 }
 
+function normalizeShelfProduct(value = {}) {
+  return { ...normalizeProduct(value),
+    physicalConfigured: value.physicalConfigured === true || value.physical_configured === true };
+}
+
 function normalizeGateway(value) {
   return { id: value.gateway_id, name: value.name || 'Gateway', online: value.connected === true };
 }
@@ -308,11 +313,44 @@ export const deviceAdapter = {
     return list(rows).map(normalizeProduct);
   },
 
+  async createBranchShelf({ branchId, name, location, accessToken }) {
+    const result = await apiRequest(`${branchPath(branchId)}/shelves`, {
+      method: 'POST',
+      accessToken,
+      body: { name, location_label: location ?? null },
+    });
+    return confirmed(result, 'La repisa no fue confirmada.');
+  },
+
+  async readShelf({ branchId, shelfId, accessToken }) {
+    return apiRequest(`${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}`, { accessToken });
+  },
+
+  async deleteShelf({ branchId, shelfId, accessToken }) {
+    return apiRequest(`${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}`, {
+      method: 'DELETE', accessToken,
+    });
+  },
+
   async listShelfProducts({ branchId, shelfId, accessToken }) {
     if (!shelfId) return [];
     const rows = await apiRequest(
       `${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/products`, { accessToken });
-    return list(rows).map(normalizeProduct);
+    return list(rows).map(normalizeShelfProduct);
+  },
+
+  async addShelfProduct({ branchId, shelfId, productId, accessToken }) {
+    return apiRequest(`${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/products`, {
+      method: 'POST',
+      accessToken,
+      body: { product_id: productId },
+    });
+  },
+
+  async removeShelfProduct({ branchId, shelfId, productId, accessToken }) {
+    return apiRequest(
+      `${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/products/${encodeURIComponent(productId)}`,
+      { method: 'DELETE', accessToken });
   },
 
   async createProduct({ branchId, sku, name, accessToken }) {

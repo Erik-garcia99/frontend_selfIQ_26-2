@@ -54,7 +54,6 @@ export default function CustomerHomeScreen({ go, back }) {
   useEffect(() => {
     if (!accessToken) return;
     let isCurrent = true;
-    setLoadingBranches(true);
     getCustomerBranches(accessToken, { page: 1, pageSize: 5 })
       .then((data) => {
         if (!isCurrent) return;
@@ -91,9 +90,12 @@ export default function CustomerHomeScreen({ go, back }) {
   }, [accessToken]);
 
   useEffect(() => {
-    if (selectedBranchId) {
-      loadAforo(selectedBranchId);
-    }
+    if (!selectedBranchId) return;
+    let isCurrent = true;
+    Promise.resolve().then(() => {
+      if (isCurrent) loadAforo(selectedBranchId);
+    });
+    return () => { isCurrent = false; };
   }, [selectedBranchId, loadAforo]);
 
   const selectedBranch = branches.find((b) => b.id === selectedBranchId) || branches[0] || null;
