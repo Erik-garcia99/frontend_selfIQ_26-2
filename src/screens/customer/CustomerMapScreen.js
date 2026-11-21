@@ -23,7 +23,6 @@ export default function CustomerMapScreen({ go, back, params }) {
   useEffect(() => {
     if (!accessToken) return;
     let isCurrent = true;
-    setLoadingBranches(true);
     getCustomerBranches(accessToken, { page: 1, pageSize: 5 })
       .then((data) => {
         if (!isCurrent) return;
@@ -63,10 +62,15 @@ export default function CustomerMapScreen({ go, back, params }) {
   // Cargar estantes al cambiar sucursal
   useEffect(() => {
     if (!selectedBranchId) return;
-    setShelves([]);
-    setPage(1);
-    setTotalPages(1);
-    loadShelves(selectedBranchId, 1, false);
+    let isCurrent = true;
+    Promise.resolve().then(() => {
+      if (!isCurrent) return;
+      setShelves([]);
+      setPage(1);
+      setTotalPages(1);
+      loadShelves(selectedBranchId, 1, false);
+    });
+    return () => { isCurrent = false; };
   }, [selectedBranchId, loadShelves]);
 
   const highlightedShelfId = params?.shelfId;

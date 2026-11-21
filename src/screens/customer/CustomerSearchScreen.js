@@ -70,7 +70,12 @@ export default function CustomerSearchScreen({ go, back, params }) {
 
   // Sincronizar filtro de estante cuando cambian los parámetros de navegación
   useEffect(() => {
-    if (params?.shelfId) setShelfFilter(params.shelfId);
+    if (!params?.shelfId) return;
+    let isCurrent = true;
+    Promise.resolve().then(() => {
+      if (isCurrent) setShelfFilter(params.shelfId);
+    });
+    return () => { isCurrent = false; };
   }, [params]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [error, setError] = useState(null);
@@ -149,12 +154,20 @@ export default function CustomerSearchScreen({ go, back, params }) {
   }, [accessToken, selectedBranchId, debouncedQuery, selectedCategory, page, pageSize, shelfFilter]);
 
   useEffect(() => {
-    search();
+    let isCurrent = true;
+    Promise.resolve().then(() => {
+      if (isCurrent) search();
+    });
+    return () => { isCurrent = false; };
   }, [search]);
 
   // Resetear a la primera página cuando cambian los filtros
   useEffect(() => {
-    setPage(1);
+    let isCurrent = true;
+    Promise.resolve().then(() => {
+      if (isCurrent) setPage(1);
+    });
+    return () => { isCurrent = false; };
   }, [debouncedQuery, selectedCategory, shelfFilter]);
 
   // Limpieza de timers de guía al desmontar

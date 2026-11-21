@@ -5,7 +5,6 @@ import { describeError } from '../../utils/errorMessages';
 import { useAuth } from '../../context/AuthContext';
 import { canManage } from '../../utils/validation';
 import { colors as C } from '../../theme/colors';
-import { useAuth } from '../../context/AuthContext';
 import PhysicalConfigForm from './PhysicalConfigForm';
 
 function ProductRow({ product, onPress }) {

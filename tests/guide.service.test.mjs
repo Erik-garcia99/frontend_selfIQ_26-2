@@ -112,7 +112,7 @@ globalThis.__guideApiRequest = async path => {
   return [{ id: 'product-1', name: 'Agua', sku: 'SKU-1', active: true }];
 };
 assert.deepEqual(await service.deviceRequest('listShelfProducts', { branchId: 'b' }, { shelfId: 's/3' }), [
-  { id: 'product-1', name: 'Agua', sku: 'SKU-1', active: true },
+  { id: 'product-1', name: 'Agua', sku: 'SKU-1', active: true, physicalConfigured: false },
 ]);
 assert.equal(shelfRequest, '/branches/b/shelves/s%2F3/products');
 shelfRequest = null;
