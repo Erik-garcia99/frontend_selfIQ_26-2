@@ -1,10 +1,10 @@
 import { View } from 'react-native';
 import { ClientScreen, Head, Info } from '../../components/layout';
 
-export default function CustomerPurchasesScreen({ go }) {
+export default function CustomerPurchasesScreen({ go, back }) {
   return (
     <ClientScreen go={go} active="purchases">
-      <Head big title="Mis compras" subtitle="Historial de compras registradas" />
+      <Head back="Volver" onBack={back} big title="Mis compras" subtitle="Historial de compras registradas" />
       <View style={{ marginTop: 16 }}>
         <Info
           title="Historial de compras"

@@ -9,7 +9,7 @@ import { describeError } from '../../utils/errorMessages';
 import { isEmail } from '../../utils/validation';
 import { layoutStyles as L } from '../../theme/layout';
 
-const empty = { first_name: '', last_name: '', email: '', password: '', confirmation: '', registration_token: '' };
+const empty = { first_name: '', last_name: '', email: '', password: '', confirmation: '', registration_token: '', organization_code: '' };
 const accountTypes = [['customer', 'Cliente'], ['employee', 'Empleado']];
 
 export default function RegisterScreen({ go }) {
@@ -33,6 +33,9 @@ export default function RegisterScreen({ go }) {
     if (!isCustomer && !form.registration_token.trim()) {
       return task.setError('Completa el token de sucursal que te dio tu administrador.');
     }
+    if (isCustomer && !form.organization_code.trim()) {
+      return task.setError('Completa el código de organización que te dio la tienda.');
+    }
     if (form.password.length < 8) return task.setError('La contraseña debe tener al menos 8 caracteres.');
     if (form.password !== form.confirmation) return task.setError('Las contraseñas no coinciden.');
 
@@ -43,7 +46,7 @@ export default function RegisterScreen({ go }) {
       password: form.password,
     };
     const result = await task.run(() => isCustomer
-      ? registerCustomer(base)
+      ? registerCustomer({ ...base, organization_code: form.organization_code.trim() })
       : register({ ...base, registration_token: form.registration_token.trim() }));
 
     if (!result) {
@@ -89,7 +92,7 @@ export default function RegisterScreen({ go }) {
         <TextField label="Correo" placeholder="tu@correo.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} value={form.email} onChangeText={update('email')} editable={!task.loading} />
         <TextField label="Contraseña" placeholder="Mínimo 8 caracteres" secureTextEntry autoCapitalize="none" value={form.password} onChangeText={update('password')} editable={!task.loading} />
         <TextField label="Confirmar contraseña" placeholder="Repite la contraseña" secureTextEntry autoCapitalize="none" value={form.confirmation} onChangeText={update('confirmation')} editable={!task.loading} />
-        {isCustomer ? null : <TextField label="Token de la sucursal" placeholder="Token que te dio tu administrador" autoCapitalize="none" autoCorrect={false} value={form.registration_token} onChangeText={update('registration_token')} editable={!task.loading} />}
+        {isCustomer ? <TextField label="Código de la organización" placeholder="Código que te dio la tienda" autoCapitalize="characters" autoCorrect={false} value={form.organization_code} onChangeText={update('organization_code')} editable={!task.loading} /> : <TextField label="Token de la sucursal" placeholder="Token que te dio tu administrador" autoCapitalize="none" autoCorrect={false} value={form.registration_token} onChangeText={update('registration_token')} editable={!task.loading} />}
         <Message error={task.error} />
         {!isCustomer && createdId ? <Text selectable style={[L.note, { marginBottom: 14 }]}>Folio para aprobación: {createdId}</Text> : null}
         <Primary tall loading={task.loading} onPress={submit}>{isCustomer ? 'Crear cuenta de cliente' : 'Registrar usuario'}</Primary>

@@ -91,11 +91,27 @@ function PublicNavigator() {
 
 function CustomerNavigator() {
   const [route, setRoute] = useState('home');
-  const go = (next) => {
+  const [params, setParams] = useState(null);
+  const [history, setHistory] = useState([]);
+  const go = (next, nextParams) => {
+    if (next === route) return;
+    setHistory((h) => [...h, route]);
+    setParams(nextParams || null);
     setRoute(customerScreens[next] ? next : 'home');
   };
+  const back = () => {
+    if (history.length === 0) {
+      setRoute('home');
+      setParams(null);
+      return;
+    }
+    const prev = history[history.length - 1];
+    setHistory((h) => h.slice(0, -1));
+    setRoute(customerScreens[prev] ? prev : 'home');
+    setParams(null);
+  };
   const Screen = customerScreens[route] || CustomerHome;
-  return <Screen key={route} go={go} />;
+  return <Screen key={route} go={go} back={back} params={params} />;
 }
 
 function StaffNavigator() {

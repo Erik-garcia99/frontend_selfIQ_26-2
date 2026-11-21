@@ -99,9 +99,10 @@ export function Primary({ children, onPress, loading = false, disabled = false, 
     <Text style={variant === 'light' ? L.secondaryText : L.primaryText}>{loading ? loadingLabel : children}</Text></Pressable>;
 }
 
-export function Info({ title, children }) {
+export function Info({ title, text, children }) {
+  const content = children ?? text;
   return <View style={L.cardSoft}>{title ? <Text style={L.cardTitle}>{title}</Text> : null}
-    {typeof children === 'string' ? <Text style={L.cardText}>{children}</Text> : children}</View>;
+    {typeof content === 'string' ? <Text style={L.cardText}>{content}</Text> : content}</View>;
 }
 
 export function LinkButton({ children, onPress, align = 'center' }) {
