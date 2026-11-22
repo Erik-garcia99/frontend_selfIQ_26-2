@@ -3,7 +3,7 @@ import { DeviceProvider } from '../context/DeviceContext';
 import ConfirmDevice from '../screens/devices/ConfirmDeviceScreen';
 import CameraDetail from '../screens/devices/CameraDetailScreen';
 import { useAuth } from '../context/AuthContext';
-import { canManage, canCreateBranch } from '../utils/validation';
+import { canOpenStaffRoute } from '../utils/staffAccess';
 import Login from '../screens/auth/LoginScreen';
 import Register from '../screens/auth/RegisterScreen';
 import Recovery from '../screens/auth/RecoveryScreen';
@@ -118,12 +118,12 @@ function CustomerNavigator() {
 function StaffNavigator() {
   const { user } = useAuth();
   const [route, setRoute] = useState('home');
+  const allowed = (candidate) => canOpenStaffRoute(candidate, user, deviceRoutes);
   const go = (next) => {
-    if (next === 'branch' && !canCreateBranch(user)) return;
-    if (next !== 'test-product-light' && (['tokens', 'approve'].includes(next) || deviceRoutes.has(next)) && !canManage(user)) return;
+    if (!allowed(next)) return;
     setRoute(privateScreens[next] ? next : 'home');
   };
-  const allowedRoute = (route === 'branch' && !canCreateBranch(user)) || (route !== 'test-product-light' && (['tokens', 'approve'].includes(route) || deviceRoutes.has(route)) && !canManage(user)) ? 'home' : route;
+  const allowedRoute = allowed(route) ? route : 'home';
   const Screen = privateScreens[allowedRoute] || Home;
   return <Screen key={allowedRoute} go={go} />;
 }
