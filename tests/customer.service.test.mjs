@@ -85,10 +85,21 @@ test('getCustomerShelves consulta estantes por sucursal', async () => {
   const calls = [];
   globalThis.fetch = async (url, options) => {
     calls.push({ url, options });
-    return { ok: true, status: 200, text: async () => '{"items":[],"total":0,"page":1,"page_size":5,"total_pages":1}' };
+    return { ok: true, status: 200, text: async () => JSON.stringify({
+      items: [{
+        id: 's-1', name: 'Estante 1', location: 'Pasillo 1',
+        product_count: 2, guide_count: 1,
+        channel: 3, gpio_pin: 17, lights: [{ id: 'l-1' }],
+      }],
+      total: 1, page: 1, page_size: 5, total_pages: 1,
+    }) };
   };
   try {
-    await getCustomerShelves('test-token', 'b-123', { page: 1, pageSize: 5 });
+    const result = await getCustomerShelves('test-token', 'b-123', { page: 1, pageSize: 5 });
+    assert.deepEqual(Object.keys(result.items[0]).sort(),
+      ['guide_count', 'id', 'location', 'name', 'product_count']);
+    assert.equal(result.items[0].name, 'Estante 1');
+    assert.equal(result.items[0].product_count, 2);
     const { url, options } = calls[0];
     assert.ok(url.includes('/customer/branches/b-123/shelves?'));
     const parsed = new URL(url);

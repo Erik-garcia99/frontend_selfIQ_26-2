@@ -32,6 +32,7 @@ export default function PanelScreen({ go }) {
       <View style={styles.panelGrid}>
         <PanelTile title="Control de LED" detail="Productos asociados · ON / OFF" icon={frameIcons.shelves}
           onPress={() => { d.setDraft({ controlBack: 'panel' }); go('test-product-light'); }} />
+        <PanelTile title="Estantes" detail="Productos, luces y cámara de cada repisa." icon={frameIcons.shelves} onPress={() => go('shelves')} />
       </View>
 
       {access.operations ? <>
@@ -39,7 +40,6 @@ export default function PanelScreen({ go }) {
         <View style={styles.panelGrid}>
           <PanelTile title="Dispositivos" detail="Equipos, búsqueda y configuración." icon={navIcons.settings} onPress={() => go('devices')} />
           <PanelTile title="Productos" detail="Catálogo usado por estantes y cámaras." icon={frameIcons.inventory} onPress={() => go('products')} />
-          <PanelTile title="Estantes" detail="Crea repisas y asigna productos." icon={frameIcons.shelves} onPress={() => go('shelves')} />
         </View>
       </> : null}
 

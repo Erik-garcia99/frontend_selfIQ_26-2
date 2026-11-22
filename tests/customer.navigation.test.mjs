@@ -20,6 +20,15 @@ test('AppNavigator contiene rutas exclusivas y aisladas para el cliente', () => 
   assert.ok(content.includes('<CustomerNavigator'), 'AppNavigator debe renderizar CustomerNavigator para rol customer');
 });
 
+test('la lista del cliente muestra solo nombre, ubicación y conteos', () => {
+  const content = fs.readFileSync(new URL('../src/screens/customer/CustomerMapScreen.js', import.meta.url), 'utf8');
+  assert.ok(content.includes('Lista de estantes'));
+  assert.ok(content.includes('shelf.name'));
+  assert.ok(content.includes('shelf.location'));
+  assert.ok(content.includes('shelf.product_count'));
+  assert.ok(!/channel|gpio|nodeId/i.test(content), 'La vista del cliente no debe exponer configuración técnica');
+});
+
 test('Aislamiento de rutas: cliente no puede saltar a pantallas de staff', () => {
   const customerScreens = ['home', 'search', 'map', 'purchases', 'profile'];
   const staffScreens = ['tokens', 'approve', 'branch', 'gateway', 'devices', 'calibration', 'panel'];

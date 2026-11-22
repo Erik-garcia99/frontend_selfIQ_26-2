@@ -305,6 +305,11 @@ export const deviceAdapter = {
       id: shelf.id,
       name: shelf.name,
       location: shelf.location ?? null,
+      cameraNodeId: shelf.cameraNodeId ?? null,
+      cameraName: shelf.cameraName ?? null,
+      productCount: Number(shelf.productCount ?? 0),
+      lightCount: Number(shelf.lightCount ?? 0),
+      guideNodeCount: Number(shelf.guideNodeCount ?? 0),
     }));
   },
 
@@ -339,6 +344,20 @@ export const deviceAdapter = {
     return list(rows).map(normalizeShelfProduct);
   },
 
+  // Productos ya asociados a los LED de la repisa (dominio de la guía).
+  // Distinto de `listShelfProducts`, que devuelve la configuración `shelf_product`.
+  async listShelfGuideProducts({ branchId, shelfId, accessToken }) {
+    if (!shelfId) return [];
+    const rows = await apiRequest(
+      `${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/guide-products`, { accessToken });
+    return list(rows).map((value = {}) => ({
+      id: value.id,
+      sku: value.sku ?? '',
+      name: value.name ?? '',
+      active: value.active !== false,
+    }));
+  },
+
   async addShelfProduct({ branchId, shelfId, productId, accessToken }) {
     return apiRequest(`${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/products`, {
       method: 'POST',
@@ -347,9 +366,13 @@ export const deviceAdapter = {
     });
   },
 
-  async removeShelfProduct({ branchId, shelfId, productId, accessToken }) {
+  async removeShelfProduct({ branchId, shelfId, productId, withLight, accessToken }) {
+    // El backend exige confirmación explícita cuando el producto aún tiene un
+    // LED asociado en esta repisa; evita dejar la luz apuntando a un producto
+    // que ya no está en la repisa.
+    const query = withLight ? '?with_light=true' : '';
     return apiRequest(
-      `${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/products/${encodeURIComponent(productId)}`,
+      `${branchPath(branchId)}/shelves/${encodeURIComponent(shelfId)}/products/${encodeURIComponent(productId)}${query}`,
       { method: 'DELETE', accessToken });
   },
 

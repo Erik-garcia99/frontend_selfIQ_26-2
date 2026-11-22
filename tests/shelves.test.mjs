@@ -12,10 +12,21 @@ const expoRequire = createRequire(require.resolve('expo/package.json'));
 const { transformSync } = expoRequire('@babel/core');
 
 const data = {
-  listShelves: [{ id: 's1', name: 'Repisa A', location: 'Pasillo 1' }],
+  listShelves: [{
+    id: 's1', name: 'Repisa A', location: 'Pasillo 1',
+    productCount: 1, lightCount: 1, cameraName: null, cameraNodeId: null,
+  }],
   listShelfProducts: [{ id: 'p1', sku: 'SKU-1', name: 'Leche', physicalConfigured: false }],
   listProducts: [{ id: 'p2', sku: 'SKU-2', name: 'Pan', physicalConfigured: true }],
-  readShelf: { id: 's1', name: 'Repisa A', location: 'Pasillo 1', products: [], lights: [] },
+  listDevices: [],
+  readShelf: {
+    id: 's1', name: 'Repisa A', location: 'Pasillo 1', cameraNodeId: null, cameraName: null,
+    products: [{ id: 'p1', sku: 'SKU-1', name: 'Leche', physicalConfigured: false }],
+    lights: [{
+      id: 'l1', name: 'Luz 1', channel: 0, nodeId: 'n1',
+      products: [{ id: 'p1', name: 'Leche', sku: 'SKU-1' }],
+    }],
+  },
 };
 const wrap = ({ children }) => React.createElement('div', null, children);
 const ui = {
@@ -38,7 +49,11 @@ function load(name) {
   mod.require = id => {
     if (id === './DeviceUI') return ui;
     if (id === 'react') return React;
+    if (id === 'react-native') return rn;
     if (id === '../../utils/errorMessages') return { describeError: error => ({ message: error.message }) };
+    if (id === '../../context/AuthContext') return { useAuth: () => ({ user: { role: 'owner' } }) };
+    if (id === '../../utils/validation') return { canManage: () => true };
+    if (id === '../../theme/colors') return { colors: { field: '#fff', border: '#ddd', navy: '#001D39', muted: '#587991', text: '#0A4174', blue: '#7BBDE8' } };
     return require(id);
   };
   const { code } = transformSync(readFileSync(filename, 'utf8'), {
@@ -51,6 +66,18 @@ function load(name) {
   mod._compile(code, filename);
   return mod.exports.default;
 }
+
+const domProps = props => Object.fromEntries(
+  Object.entries(props).filter(([key]) => !key.startsWith('accessibility')),
+);
+const rn = {
+  StyleSheet: { create: styles => styles },
+  Pressable: ({ children, style, ...props }) => React.createElement('div', {
+    ...domProps(props), style: typeof style === 'function' ? style({ pressed: false }) : style,
+  }, typeof children === 'function' ? children({ pressed: false }) : children),
+  Text: ({ children, ...props }) => React.createElement('span', domProps(props), children),
+  View: ({ children, ...props }) => React.createElement('div', domProps(props), children),
+};
 
 const source = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -79,6 +106,24 @@ test('Pantalla de estantes: alta y aviso de configuración física antes de hard
   const screen = source('../src/screens/devices/ShelvesScreen.js');
   assert.ok(screen.includes('physicalConfigured'));
   assert.ok(screen.includes('sin orientación ni medidas'));
+});
+
+test('el hub expande productos, luces y cámara sin pantalla de detalle', () => {
+  const Shelves = load('ShelvesScreen');
+  const markup = renderToStaticMarkup(React.createElement(Shelves, { go: () => {}, params: { shelfId: 's1' } }));
+  assert.ok(markup.includes('1 productos'));
+  assert.ok(markup.includes('1 LED'));
+  assert.ok(markup.includes('Sin cámara'));
+  assert.ok(markup.includes('Productos previstos'));
+  assert.ok(markup.includes('Leche'));
+  assert.ok(markup.includes('LED 1 · Luz 1'));
+  assert.ok(markup.includes('Asociado a LED 1'));
+  assert.ok(markup.includes('Vincular cámara'));
+  assert.ok(markup.includes('Editar nombre y ubicación'));
+  assert.ok(!markup.includes('Seleccionar estante'), 'El hub no vuelve a pedir estante');
+  const screen = source('../src/screens/devices/ShelvesScreen.js');
+  assert.ok(screen.includes('withLight: !!light'), 'Quitar con LED requiere confirmación explícita');
+  assert.ok(screen.includes('Inactivo'), 'Los productos inactivos se muestran, no se ocultan');
 });
 
 test('La cámara exige configuración física y permite ligar una repisa existente', () => {

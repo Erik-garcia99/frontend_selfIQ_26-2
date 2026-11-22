@@ -7,7 +7,7 @@ export default function AddLightScreen({ go }) {
   const channels = useData('listLightChannels', { deviceId: d.device?.id });
   const guide = useData('getGuide', { deviceId: d.device?.id });
   const shelves = useData('listShelves');
-  const products = useData('listShelfProducts', { shelfId: d.draft.shelfId });
+  const products = useData('listShelfGuideProducts', { shelfId: d.draft.shelfId });
   const catalogue = useData('listProducts');
   const associations = useData('listGuideAssociations');
   const [productId, setProductId] = useState(null);

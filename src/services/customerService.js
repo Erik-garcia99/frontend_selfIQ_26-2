@@ -30,14 +30,28 @@ export async function getCustomerCategories(accessToken, branchId) {
 
 /**
  * Consulta los estantes de una sucursal (solo lectura) para el cliente.
- * Devuelve resumen: nombre, ubicación textual, conteo de productos y con guía.
+ * Contrato reducido: nombre, ubicación textual y conteos. El `id` se conserva
+ * como identificador opaco para filtrar productos; nunca se muestra ni se
+ * interpreta como dato técnico. Canales, GPIO, nodos y configuración no
+ * atraviesan esta capa.
  */
 export async function getCustomerShelves(accessToken, branchId, { page = 1, pageSize = 5 } = {}) {
   if (!branchId) throw new Error('Se requiere un identificador de sucursal.');
   const params = new URLSearchParams();
   if (page) params.set('page', String(page));
   if (pageSize) params.set('page_size', String(pageSize));
-  return apiRequest(`/customer/branches/${encodeURIComponent(branchId)}/shelves?${params}`, { accessToken });
+  const data = await apiRequest(
+    `/customer/branches/${encodeURIComponent(branchId)}/shelves?${params}`, { accessToken });
+  return {
+    ...data,
+    items: (Array.isArray(data?.items) ? data.items : []).map((item) => ({
+      id: item.id,
+      name: item.name ?? '',
+      location: item.location ?? null,
+      product_count: Number(item.product_count ?? 0),
+      guide_count: Number(item.guide_count ?? 0),
+    })),
+  };
 }
 export async function getCustomerProducts(accessToken, branchId, { q = '', category = '', page = 1, pageSize = 20 } = {}) {
   if (!branchId) throw new Error('Se requiere un identificador de sucursal.');
