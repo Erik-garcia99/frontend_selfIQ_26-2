@@ -4,10 +4,13 @@ import { apiRequest, API_BASE_URL } from './http.js';
 
 const root = (branchId) => `/branches/${encodeURIComponent(branchId)}`;
 
-function query(filters = {}) {
+function query(filters = {}, extra = {}) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
     if (value) params.set(key === 'nodeId' ? 'node_id' : key, value);
+  }
+  for (const [key, value] of Object.entries(extra)) {
+    if (value !== undefined && value !== null) params.set(key, value);
   }
   const value = params.toString();
   return value ? `?${value}` : '';
@@ -16,13 +19,13 @@ function query(filters = {}) {
 export const logsService = {
   list({ branchId, accessToken, filters = {}, offset = 0, limit = 50 }) {
     return apiRequest(
-      `${root(branchId)}/logs${query(filters)}&offset=${offset}&limit=${limit}`,
+      `${root(branchId)}/logs${query(filters, { offset, limit })}`,
       { accessToken });
   },
 
   nodeHistory({ branchId, nodeId, accessToken, offset = 0, limit = 50 }) {
     return apiRequest(
-      `${root(branchId)}/logs/nodes/${encodeURIComponent(nodeId)}?offset=${offset}&limit=${limit}`,
+      `${root(branchId)}/logs/nodes/${encodeURIComponent(nodeId)}${query({}, { offset, limit })}`,
       { accessToken });
   },
 
