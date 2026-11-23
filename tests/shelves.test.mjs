@@ -18,7 +18,7 @@ const data = {
   }],
   listShelfProducts: [{ id: 'p1', sku: 'SKU-1', name: 'Leche', physicalConfigured: false }],
   listProducts: [{ id: 'p2', sku: 'SKU-2', name: 'Pan', physicalConfigured: true }],
-  listDevices: [],
+  listDevices: [{ id: 'cam1', name: 'Cámara 1', type: 'camera' }],
   readShelf: {
     id: 's1', name: 'Repisa A', location: 'Pasillo 1', cameraNodeId: null, cameraName: null,
     products: [{ id: 'p1', sku: 'SKU-1', name: 'Leche', physicalConfigured: false }],
@@ -48,6 +48,10 @@ function load(name) {
   mod.paths = Module._nodeModulePaths(dirname(filename));
   mod.require = id => {
     if (id === './DeviceUI') return ui;
+    if (id === './RoiOccupancyPanel') return () => null;
+    if (id === '../../services/deviceAdapter') return { deviceAdapter: {} };
+    if (id === '../../utils/useRoiOccupancy.js') return { useRoiOccupancy: () => ({ label: '', now: 0 }) };
+    if (id === '../../utils/roiOccupancy.js') return { roiOccupancyPresentation: () => ({ label: '' }) };
     if (id === 'react') return React;
     if (id === 'react-native') return rn;
     if (id === '../../utils/errorMessages') return { describeError: error => ({ message: error.message }) };
@@ -72,6 +76,8 @@ const domProps = props => Object.fromEntries(
 );
 const rn = {
   StyleSheet: { create: styles => styles },
+  ActivityIndicator: () => null,
+  Image: () => null,
   Modal: ({ children, visible }) => visible ? React.createElement('div', null, children) : null,
   Pressable: ({ children, style, ...props }) => React.createElement('div', {
     ...domProps(props), style: typeof style === 'function' ? style({ pressed: false }) : style,
@@ -141,7 +147,24 @@ test('productos y luces son filas simples; las acciones aparecen al tocar', () =
   assert.ok(screen.includes("setSheet({ type: 'light'"));
   assert.ok(screen.includes("view: 'products'"));
   assert.ok(screen.includes("view: 'name'"));
-  assert.ok(screen.includes('import { Modal'), 'Las acciones viven en un panel emergente');
+  assert.ok(screen.includes('<Modal'), 'Las acciones viven en un panel emergente');
+});
+
+test('Estantes lista solo nombres de cámaras; el detalle abre en panel', () => {
+  const Shelves = load('ShelvesScreen');
+  const markup = renderToStaticMarkup(React.createElement(Shelves, { go: () => {}, params: { shelfId: 's1' } }));
+  assert.ok(markup.includes('Cámara 1'), 'La lista muestra el nombre de la cámara');
+  assert.ok(!markup.includes('Ocupación visual por zona'), 'Sin texto basura en la lista');
+  const screen = source('../src/screens/devices/ShelvesScreen.js');
+  assert.ok(screen.includes('CameraList'), 'Lista de cámaras de la sucursal');
+  assert.ok(screen.includes('<Sheet visible={!!selected}'), 'El detalle se abre al tocar');
+  assert.ok(screen.includes('CameraQuickView'));
+  assert.ok(screen.includes('requestSnapshot('), 'La foto se pide automáticamente al entrar');
+  assert.ok(screen.includes('RoiSummary'), 'Resumen propio, sin tocar el panel existente');
+  assert.ok(!screen.includes('RoiOccupancyPanel'), 'No usa el panel completo');
+  assert.ok(screen.includes("go('camera-detail')"), 'El botón abre la cámara completa ya existente');
+  assert.ok(screen.includes('Ver cámara completa'));
+  assert.ok(!screen.includes('Ver zonas (ROI)'));
 });
 
 test('La cámara exige configuración física y permite ligar una repisa existente', () => {

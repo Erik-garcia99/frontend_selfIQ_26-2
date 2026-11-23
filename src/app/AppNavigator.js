@@ -18,6 +18,7 @@ import Panel from '../screens/PanelScreen';
 import Alerts from '../screens/alerts/LiveAlertsScreen';
 import Tokens from '../screens/admin/TokenScreen';
 import Approve from '../screens/admin/ApproveUserScreen';
+import Logs from '../screens/admin/LogsScreen';
 import Gateway from '../screens/gateways/GatewayScreen';
 import Devices from '../screens/devices/DevicesScreen';
 import AddDevice from '../screens/devices/AddDeviceScreen';
@@ -68,7 +69,7 @@ const customerScreens = {
   profile: CustomerProfile,
 };
 
-const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: Panel, alerts: Alerts, tokens: Tokens, approve: Approve, gateway: Gateway,
+const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: Panel, alerts: Alerts, tokens: Tokens, logs: Logs, approve: Approve, gateway: Gateway,
   'settings-profile': ProfileSettings, 'settings-notifications': NotificationsSettings, 'settings-security': SecuritySettings, 'settings-logout': Logout,
   'confirm-device': ConfirmDevice, 'camera-detail': CameraDetail, devices: Devices, 'add-device': AddDevice, 'registered-devices': RegisteredDevices, guide: GuideNode, 'guide-old': Guide,
   'preparing-search': PreparingSearch, searching: Searching, 'device-found': DeviceFound, 'add-camera': AddCamera,

@@ -1,11 +1,14 @@
-import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Shell, Copy, ErrorNotice, FieldCard, Info, LoadState, Primary, SectionLabel, useData, useDevices,
 } from './DeviceUI';
 import { describeError } from '../../utils/errorMessages';
 import { useAuth } from '../../context/AuthContext';
 import { canManage } from '../../utils/validation';
+import { deviceAdapter } from '../../services/deviceAdapter';
+import { useRoiOccupancy } from '../../utils/useRoiOccupancy.js';
+import { roiOccupancyPresentation } from '../../utils/roiOccupancy.js';
 import { colors as C } from '../../theme/colors';
 
 // Hub de repisa (ME-7 + ME-8, Parte A). Una sola tarjeta expandible reúne
@@ -88,8 +91,140 @@ function CameraPicker({ shelfId, onLink, onClose, busy }) {
   </>;
 }
 
+// Resumen ligero de zonas: solo nombre y porcentaje. El panel completo de
+// ocupación sigue intacto en su propio archivo para la pantalla de cámara.
+function RoiSummaryRow({ branchId, roi, accessToken }) {
+  const telemetry = useRoiOccupancy({ branchId, roiId: roi.id, accessToken });
+  const view = roiOccupancyPresentation(telemetry, telemetry.now);
+  return <View style={S.roiRow}>
+    <Text style={S.roiName}>{roi.name || 'Zona'}</Text>
+    <Text style={S.roiValue}>{view.label}</Text>
+  </View>;
+}
+
+function RoiSummary({ branchId, shelfId, accessToken }) {
+  const state = useData('listRois', { branchId, shelfId });
+  const rois = state.data?.rois;
+  if (!Array.isArray(rois) || rois.length === 0) return null;
+  return <View style={S.roiSummary}>
+    {rois.map(roi => <RoiSummaryRow key={roi.id} branchId={branchId} roi={roi} accessToken={accessToken} />)}
+  </View>;
+}
+
+// Vista rápida de la cámara dentro de Estantes: foto nueva al entrar y solo
+// nombre + porcentaje de cada zona. No edita ROI ni calibra.
+function CameraQuickView({ branchId, deviceId, accessToken, go, cameraName }) {
+  const d = useDevices();
+  const [shelfId, setShelfId] = useState(null);
+  const [snapshot, setSnapshot] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const active = useRef(false);
+  const requesting = useRef(false);
+  const snapshotRef = useRef(null);
+
+  useEffect(() => {
+    active.current = true;
+    deviceAdapter.getDeviceShelf({ branchId, deviceId, accessToken })
+      .then(value => { if (active.current) setShelfId(value?.id || null); })
+      .catch(() => { if (active.current) setShelfId(null); });
+    deviceAdapter.fetchSnapshot({ branchId, deviceId, accessToken })
+      .then(value => { if (active.current) { snapshotRef.current = value; setSnapshot(value); } })
+      .catch(failure => {
+        if (active.current && failure.status !== 404) setError('No pudimos cargar la foto.');
+      });
+    capture();
+    return () => { active.current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, deviceId, accessToken]);
+
+  async function capture() {
+    if (requesting.current || !branchId || !deviceId) return;
+    requesting.current = true;
+    setLoading(true); setError('');
+    const params = { branchId, deviceId, accessToken };
+    try {
+      await deviceAdapter.requestSnapshot(params);
+      const deadline = Date.now() + 40000;
+      while (active.current && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        if (!active.current) return;
+        let next;
+        try {
+          next = await deviceAdapter.fetchSnapshot(params);
+        } catch (failure) {
+          if (failure.status === 404) continue;
+          throw failure;
+        }
+        if (!active.current) return;
+        const previous = snapshotRef.current;
+        const sameFingerprint = Boolean(next.fingerprint) && next.fingerprint === (previous?.fingerprint || '');
+        const sameTimestamp = Boolean(next.capturedAt) && next.capturedAt === (previous?.capturedAt || '');
+        if (!sameFingerprint || !sameTimestamp) {
+          snapshotRef.current = next;
+          setSnapshot(next);
+          return;
+        }
+      }
+      if (active.current) setError('La foto está tardando. Inténtalo de nuevo.');
+    } catch {
+      if (active.current) setError('No pudimos tomar la foto. Comprueba la cámara.');
+    } finally {
+      requesting.current = false;
+      if (active.current) setLoading(false);
+    }
+  }
+
+  return <View style={S.quick}>
+    <Text style={S.quickHeading}>{cameraName || 'Cámara'}</Text>
+    <View style={S.quickPreview}>
+      {snapshot ? <Image
+        key={snapshot.fingerprint || 'quick'}
+        source={{ uri: snapshot.uri }}
+        accessibilityLabel="Foto actual de la repisa"
+        style={S.quickImage}
+      /> : <View style={S.quickEmpty}>
+        <ActivityIndicator color={C.navy} />
+        <Text style={S.quickEmptyText}>Cargando foto…</Text>
+      </View>}
+    </View>
+    {loading ? <Text style={S.quickNote}>Actualizando la foto…</Text> : null}
+    {error ? <Text style={S.quickError}>{error}</Text> : null}
+    <Primary variant="light" onPress={capture} loading={loading} loadingLabel="Tomando foto…">
+      Tomar otra foto
+    </Primary>
+    {shelfId ? <RoiSummary branchId={branchId} shelfId={shelfId} accessToken={accessToken} /> : null}
+    <Primary onPress={() => {
+      d.selectDevice({ id: deviceId, name: cameraName || 'Cámara', type: 'camera' });
+      go('camera-detail');
+    }}>Ver cámara completa</Primary>
+  </View>;
+}
+
+function CameraList({ branchId, accessToken, go }) {
+  const devices = useData('listDevices');
+  const cameras = (devices.data || []).filter(device => device.type === 'camera');
+  const [selected, setSelected] = useState(null);
+  return <>
+    <LoadState state={devices}>
+      {cameras.map(camera => <Pressable key={camera.id} accessibilityRole="button"
+        accessibilityLabel={`Ver ${camera.name || 'cámara'}`}
+        onPress={() => setSelected(camera)} style={({ pressed }) => [S.row, pressed && S.pressed]}>
+        <Text style={S.rowTitle}>{camera.name || 'Cámara'}</Text>
+        <Text style={S.rowChevron}>›</Text>
+      </Pressable>)}
+      {!cameras.length ? <Info>No hay cámaras registradas en la sucursal. Regístralas desde Dispositivos.</Info> : null}
+    </LoadState>
+    <Sheet visible={!!selected} title={selected?.name || 'Cámara'} onClose={() => setSelected(null)}>
+      {selected ? <CameraQuickView branchId={branchId} deviceId={selected.id} accessToken={accessToken}
+        go={go} cameraName={selected.name} /> : null}
+    </Sheet>
+  </>;
+}
+
 function ShelfBody({ shelf, go, manage, onChanged }) {
   const d = useDevices();
+  const { accessToken } = useAuth();
   const detail = useData('readShelf', { shelfId: shelf.id });
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -271,20 +406,12 @@ function ShelfBody({ shelf, go, manage, onChanged }) {
       </Pressable>)}
       {!lights.length ? <Info>Esta repisa no tiene luces guía. Se configuran desde Dispositivos → guía LED.</Info> : null}
 
-      <SectionLabel>Cámara y zonas</SectionLabel>
-      {data.cameraNodeId ? <>
-        <Text style={S.rowTitle}>{data.cameraName || 'Cámara vinculada'}</Text>
-        <Primary variant="light" onPress={() => {
-          d.selectDevice({ id: data.cameraNodeId, name: data.cameraName || 'Cámara', type: 'camera' });
-          go('shelf-zones');
-        }}>Ver zonas (ROI)</Primary>
-      </> : <>
-        <Copy>Sin cámara. Vincular una cámara no requiere mapa 2D, pero sí productos con medidas.</Copy>
-        {manage ? (!showCameras
-          ? <Primary variant="light" disabled={!!busy} onPress={() => setShowCameras(true)}>Vincular cámara</Primary>
-          : <CameraPicker shelfId={shelf.id} busy={!!busy} onLink={linkCamera}
-              onClose={() => setShowCameras(false)} />) : null}
-      </>}
+      <SectionLabel>Cámaras</SectionLabel>
+      <CameraList branchId={d.branchId} accessToken={accessToken} go={go} />
+      {manage ? (!showCameras
+        ? <Primary variant="light" disabled={!!busy} onPress={() => setShowCameras(true)}>Vincular cámara a esta repisa</Primary>
+        : <CameraPicker shelfId={shelf.id} busy={!!busy} onLink={linkCamera}
+            onClose={() => setShowCameras(false)} />) : null}
 
       {manage ? <>
         <SectionLabel>Repisa</SectionLabel>
@@ -468,4 +595,16 @@ const S = StyleSheet.create({
   sheetTitle: { color: C.navy, fontSize: 18, fontWeight: '700' },
   sheetSubtitle: { color: C.muted, fontSize: 13 },
   sheetActions: { gap: 8 },
+  quick: { gap: 12 },
+  quickHeading: { color: C.navy, fontSize: 17, fontWeight: '600' },
+  quickPreview: { backgroundColor: C.border, borderRadius: 16, overflow: 'hidden', aspectRatio: 4 / 3, justifyContent: 'center' },
+  quickImage: { width: '100%', height: '100%', resizeMode: 'contain' },
+  quickEmpty: { padding: 16, alignItems: 'center', gap: 8 },
+  quickEmptyText: { color: C.muted, fontSize: 14 },
+  quickNote: { color: C.muted, fontSize: 13 },
+  quickError: { color: C.danger, fontSize: 13 },
+  roiSummary: { gap: 6 },
+  roiRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: C.border },
+  roiName: { color: C.text, fontSize: 14, flex: 1 },
+  roiValue: { color: C.navy, fontSize: 18, fontWeight: '700' },
 });
