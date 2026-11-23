@@ -77,7 +77,7 @@ export default function CustomerMapScreen({ go, back, params }) {
 
   return (
     <ClientScreen go={go} active="map">
-      <Head back="Volver" onBack={back} big title="Estantes y ubicaciones" subtitle="Ubicación de productos en la tienda" />
+      <Head back="Volver" onBack={back} big title="Lista de estantes" subtitle="Nombre, ubicación y productos de cada estante" />
 
       {loadingBranches ? (
         <View style={{ marginTop: 16 }}><ActivityIndicator color={C.navy} /></View>

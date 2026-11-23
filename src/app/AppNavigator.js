@@ -18,6 +18,7 @@ import Panel from '../screens/PanelScreen';
 import Alerts from '../screens/alerts/LiveAlertsScreen';
 import Tokens from '../screens/admin/TokenScreen';
 import Approve from '../screens/admin/ApproveUserScreen';
+import Logs from '../screens/admin/LogsScreen';
 import Gateway from '../screens/gateways/GatewayScreen';
 import Devices from '../screens/devices/DevicesScreen';
 import AddDevice from '../screens/devices/AddDeviceScreen';
@@ -40,7 +41,6 @@ import EditDevice from '../screens/devices/EditDeviceScreen';
 import DeviceUpdated from '../screens/devices/DeviceUpdatedScreen';
 import DeleteDevice from '../screens/devices/DeleteDeviceScreen';
 import EditLight from '../screens/devices/EditLightScreen';
-import SelectShelf from '../screens/devices/SelectShelfScreen';
 import AddLight from '../screens/devices/AddLightScreen';
 import TestLight from '../screens/devices/TestLightScreen';
 import LightUpdated from '../screens/devices/LightUpdatedScreen';
@@ -48,7 +48,6 @@ import LightAdded from '../screens/devices/LightAddedScreen';
 import Products from '../screens/devices/ProductsScreen';
 import Shelves from '../screens/devices/ShelvesScreen';
 import TestProductLight from '../screens/devices/TestProductLightScreen';
-import GuideProducts from '../screens/devices/GuideProductsScreen';
 import ShelfZones from '../screens/devices/ShelfZonesScreen';
 import Calibration from '../screens/devices/CalibrationScreen';
 import Diagnostics from '../screens/devices/DiagnosticsScreen';
@@ -70,19 +69,19 @@ const customerScreens = {
   profile: CustomerProfile,
 };
 
-const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: Panel, alerts: Alerts, tokens: Tokens, approve: Approve, gateway: Gateway,
+const privateScreens = { home: Home, branch: Branch, settings: Settings, panel: Panel, alerts: Alerts, tokens: Tokens, logs: Logs, approve: Approve, gateway: Gateway,
   'settings-profile': ProfileSettings, 'settings-notifications': NotificationsSettings, 'settings-security': SecuritySettings, 'settings-logout': Logout,
   'confirm-device': ConfirmDevice, 'camera-detail': CameraDetail, devices: Devices, 'add-device': AddDevice, 'registered-devices': RegisteredDevices, guide: GuideNode, 'guide-old': Guide,
   'preparing-search': PreparingSearch, searching: Searching, 'device-found': DeviceFound, 'add-camera': AddCamera,
   'adding-device': AddingDevice, 'device-added': DeviceAdded, 'no-results': NoResults, 'search-error': SearchError,
   'confirm-error': ConfirmError, 'aforo-detail': AforoDetail, 'edit-aforo': EditAforo, 'aforo-updated': AforoUpdated,
   'edit-device': EditDevice, 'device-updated': DeviceUpdated, 'delete-device': DeleteDevice,
-  'edit-light': EditLight, 'select-shelf': SelectShelf, 'add-light': AddLight, 'test-light': TestLight,
+  'edit-light': EditLight, 'add-light': AddLight, 'test-light': TestLight,
   'light-updated': LightUpdated, 'light-added': LightAdded, products: Products, shelves: Shelves,
-  'test-product-light': TestProductLight, 'guide-products': GuideProducts, 'shelf-zones': ShelfZones,
+  'test-product-light': TestProductLight, 'shelf-zones': ShelfZones,
   calibration: Calibration, 'device-diagnostics': Diagnostics };
 
-const deviceRoutes = new Set(['gateway', 'devices', 'add-device', 'registered-devices', 'guide', 'preparing-search', 'searching', 'device-found', 'add-camera', 'adding-device', 'device-added', 'no-results', 'search-error', 'confirm-error', 'confirm-device', 'camera-detail', 'aforo-detail', 'edit-aforo', 'aforo-updated', 'edit-device', 'device-updated', 'delete-device', 'edit-light', 'select-shelf', 'add-light', 'test-light', 'light-updated', 'light-added', 'products', 'shelves', 'test-product-light', 'guide-products', 'shelf-zones', 'calibration', 'device-diagnostics']);
+const deviceRoutes = new Set(['gateway', 'devices', 'add-device', 'registered-devices', 'guide', 'preparing-search', 'searching', 'device-found', 'add-camera', 'adding-device', 'device-added', 'no-results', 'search-error', 'confirm-error', 'confirm-device', 'camera-detail', 'aforo-detail', 'edit-aforo', 'aforo-updated', 'edit-device', 'device-updated', 'delete-device', 'edit-light', 'add-light', 'test-light', 'light-updated', 'light-added', 'products', 'shelves', 'test-product-light', 'shelf-zones', 'calibration', 'device-diagnostics']);
 
 function PublicNavigator() {
   const [route, go] = useState('login');
@@ -118,14 +117,16 @@ function CustomerNavigator() {
 function StaffNavigator() {
   const { user } = useAuth();
   const [route, setRoute] = useState('home');
+  const [params, setParams] = useState(null);
   const allowed = (candidate) => canOpenStaffRoute(candidate, user, deviceRoutes);
-  const go = (next) => {
+  const go = (next, nextParams) => {
     if (!allowed(next)) return;
+    setParams(nextParams || null);
     setRoute(privateScreens[next] ? next : 'home');
   };
   const allowedRoute = allowed(route) ? route : 'home';
   const Screen = privateScreens[allowedRoute] || Home;
-  return <Screen key={allowedRoute} go={go} />;
+  return <Screen key={allowedRoute} go={go} params={params} />;
 }
 
 export function AppNavigator() {

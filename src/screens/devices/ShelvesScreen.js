@@ -1,93 +1,532 @@
-import { useState } from 'react';
-import { Shell, Copy, ErrorNotice, FieldCard, Info, LoadState, NavRow, Primary, SectionLabel, useData, useDevices } from './DeviceUI';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Shell, Copy, ErrorNotice, FieldCard, Info, LoadState, Primary, SectionLabel, useData, useDevices,
+} from './DeviceUI';
 import { describeError } from '../../utils/errorMessages';
+import { useAuth } from '../../context/AuthContext';
+import { canManage } from '../../utils/validation';
+import { deviceAdapter } from '../../services/deviceAdapter';
+import { useRoiOccupancy } from '../../utils/useRoiOccupancy.js';
+import { roiOccupancyPresentation } from '../../utils/roiOccupancy.js';
+import { colors as C } from '../../theme/colors';
 
-function ShelfDetail({ shelfId, go, onBack }) {
-  const d = useDevices();
-  const detail = useData('readShelf', { shelfId });
-  const products = useData('listShelfProducts', { shelfId });
-  const catalog = useData('listProducts');
-  const [showCatalog, setShowCatalog] = useState(false);
-  const [error, setError] = useState('');
-  const [saved, setSaved] = useState('');
-  const [busy, setBusy] = useState(false);
+// Hub de repisa (ME-7 + ME-8, Parte A). Una sola tarjeta expandible reúne
+// productos previstos, luces guía y cámara. No hay pantalla de detalle ni
+// ruta nueva: se evita fragmentar la configuración en varios saltos.
 
-  const assigned = products.data || [];
-  const assignedIds = new Set(assigned.map(product => product.id));
-  const options = (catalog.data || []).filter(product => !assignedIds.has(product.id));
-  const missing = assigned.filter(product => !product.physicalConfigured);
-  const shelf = detail.data || {};
-  const toShelves = (route) => { if (route === 'shelves') onBack(); else go(route); };
-
-  async function add(productId) {
-    if (busy) return;
-    setBusy(true); setError(''); setSaved('');
-    try {
-      await d.mutate('addShelfProduct', { shelfId, productId });
-      setShowCatalog(false);
-      setSaved('Producto agregado a la repisa.');
-      products.reload(); detail.reload();
-    } catch (failure) {
-      setError(describeError(failure).message);
-    } finally { setBusy(false); }
-  }
-
-  async function remove(productId) {
-    if (busy) return;
-    setBusy(true); setError(''); setSaved('');
-    try {
-      await d.mutate('removeShelfProduct', { shelfId, productId });
-      setSaved('Producto retirado de la repisa.');
-      products.reload(); detail.reload();
-    } catch (failure) {
-      setError(describeError(failure).message);
-    } finally { setBusy(false); }
-  }
-
-  return <Shell go={toShelves} back="shelves" title={shelf.name || 'Repisa'}
-    subtitle={shelf.location || 'Sin ubicación textual'}>
-    {missing.length > 0 ? <Info title="Configura los productos antes de asociar hardware">
-      <Copy>Esta repisa tiene productos sin orientación ni medidas. Configúralos en Productos antes de vincular la ESP32-CAM o una luz guía; así la calibración parte de datos reales.</Copy>
-      <Copy>{missing.map(product => `${product.name} (${product.sku})`).join(', ')}</Copy>
-      <Primary onPress={() => go('products')}>Ir a Productos</Primary>
-    </Info> : null}
-
-    <ErrorNotice message={error} />
-    {saved ? <Info title="Listo">{saved}</Info> : null}
-
-    <SectionLabel>Productos previstos</SectionLabel>
-    <LoadState state={products}>
-      {(assigned.length ? assigned : []).map(product => <NavRow key={product.id}
-        label={product.name} detail={`${product.sku} · ${product.physicalConfigured ? 'Configurado' : 'Sin configurar'}`}
-        onPress={() => remove(product.id)} />)}
-      {!assigned.length ? <Info>Aún no hay productos asignados a esta repisa.</Info> : null}
-    </LoadState>
-    <Copy>Toca un producto para retirarlo de la repisa. No cambia el inventario registrado.</Copy>
-
-    {!showCatalog ? <Primary variant="light" onPress={() => setShowCatalog(true)}>Agregar producto desde el catálogo</Primary> : <>
-      <SectionLabel>Catálogo de la sucursal</SectionLabel>
-      <LoadState state={catalog}>
-        {options.map(product => <NavRow key={product.id}
-          label={product.name} detail={`${product.sku} · ${product.physicalConfigured ? 'Configurado' : 'Sin configurar'}`}
-          onPress={() => add(product.id)} />)}
-        {!options.length ? <Info>No quedan productos disponibles en el catálogo.</Info> : null}
-      </LoadState>
-      <Primary variant="light" onPress={() => setShowCatalog(false)}>Cerrar catálogo</Primary>
-    </>}
-
-    <Info title="Instalación">
-      <Copy>Cuando tengas la cámara o el controlador LED, los asociarás desde Dispositivos. Las zonas y luces se mostrarán aquí como información.</Copy>
-    </Info>
-  </Shell>;
+function Badge({ children, muted = false }) {
+  return <Text style={[S.badge, muted && S.badgeMuted]}>{children}</Text>;
 }
 
-export default function ShelvesScreen({ go }) {
+function lightLabel(light) {
+  return `LED ${(light.channel ?? 0) + 1}${light.name ? ` · ${light.name}` : ''}`;
+}
+
+function productStatus(product) {
+  if (product.active === false) return 'Inactivo';
+  return product.physicalConfigured ? 'Listo' : 'Falta medir';
+}
+
+function lightDetail(light) {
+  const current = (light.products || [])[0];
+  return current ? current.name : 'Sin producto';
+}
+
+// Panel de acciones: mantiene la pantalla limpia y deja las opciones para
+// cuando la persona toca la fila que le interesa.
+function Sheet({ visible, title, subtitle, onClose, children }) {
+  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Pressable style={S.sheetBackdrop} onPress={onClose}>
+      <View style={S.sheet}>
+        <Text style={S.sheetTitle}>{title}</Text>
+        {subtitle ? <Text style={S.sheetSubtitle}>{subtitle}</Text> : null}
+        <View style={S.sheetActions}>{children}</View>
+        <Primary variant="light" onPress={onClose}>Cerrar</Primary>
+      </View>
+    </Pressable>
+  </Modal>;
+}
+
+function CatalogPicker({ shelfId, assignedIds, onAdd, onClose, busy }) {
+  const catalog = useData('listProducts');
+  const options = (catalog.data || []).filter(product => !assignedIds.has(product.id));
+  return <>
+    <SectionLabel>Catálogo de la sucursal</SectionLabel>
+    <LoadState state={catalog}>
+      {options.map(product => <Pressable key={product.id} accessibilityRole="button"
+        accessibilityLabel={`Agregar ${product.name}`} disabled={busy}
+        onPress={() => onAdd(product.id)} style={({ pressed }) => [S.row, pressed && S.pressed]}>
+        <View style={{ flex: 1 }}>
+          <Text style={S.rowTitle}>{product.name}</Text>
+          <Text style={S.rowDetail}>{`SKU · ${product.sku}`}</Text>
+        </View>
+        <Text style={S.rowAction}>Agregar</Text>
+      </Pressable>)}
+      {!options.length ? <Info>No quedan productos disponibles en el catálogo.</Info> : null}
+    </LoadState>
+    <Primary variant="light" disabled={busy} onPress={onClose}>Cerrar catálogo</Primary>
+  </>;
+}
+
+function CameraPicker({ shelfId, onLink, onClose, busy }) {
+  const devices = useData('listDevices');
+  const cameras = (devices.data || []).filter(device => device.type === 'camera');
+  return <>
+    <SectionLabel>Elige la cámara de esta repisa</SectionLabel>
+    <Copy>La cámara exige que los productos de la repisa tengan orientación y medidas. Si falta alguna, el sistema dirá cuál.</Copy>
+    <LoadState state={devices}>
+      {cameras.map(camera => <Pressable key={camera.id} accessibilityRole="button"
+        accessibilityLabel={`Vincular ${camera.name || 'cámara'}`} disabled={busy}
+        onPress={() => onLink(camera.id)} style={({ pressed }) => [S.row, pressed && S.pressed]}>
+        <View style={{ flex: 1 }}>
+          <Text style={S.rowTitle}>{camera.name || 'Cámara'}</Text>
+          <Text style={S.rowDetail}>{camera.location || 'Sin ubicación'}</Text>
+        </View>
+        <Text style={S.rowAction}>Vincular</Text>
+      </Pressable>)}
+      {!cameras.length ? <Info>No hay cámaras registradas en la sucursal. Regístralas desde Dispositivos.</Info> : null}
+    </LoadState>
+    <Primary variant="light" disabled={busy} onPress={onClose}>Cancelar</Primary>
+  </>;
+}
+
+// Resumen ligero de zonas: solo nombre y porcentaje. El panel completo de
+// ocupación sigue intacto en su propio archivo para la pantalla de cámara.
+function RoiSummaryRow({ branchId, roi, accessToken }) {
+  const telemetry = useRoiOccupancy({ branchId, roiId: roi.id, accessToken });
+  const view = roiOccupancyPresentation(telemetry, telemetry.now);
+  return <View style={S.roiRow}>
+    <Text style={S.roiName}>{roi.name || 'Zona'}</Text>
+    <Text style={S.roiValue}>{view.label}</Text>
+  </View>;
+}
+
+function RoiSummary({ branchId, shelfId, accessToken }) {
+  const state = useData('listRois', { branchId, shelfId });
+  const rois = state.data?.rois;
+  if (!Array.isArray(rois) || rois.length === 0) return null;
+  return <View style={S.roiSummary}>
+    {rois.map(roi => <RoiSummaryRow key={roi.id} branchId={branchId} roi={roi} accessToken={accessToken} />)}
+  </View>;
+}
+
+// Vista rápida de la cámara dentro de Estantes: foto nueva al entrar y solo
+// nombre + porcentaje de cada zona. No edita ROI ni calibra.
+function CameraQuickView({ branchId, deviceId, accessToken, go, cameraName }) {
   const d = useDevices();
+  const [shelfId, setShelfId] = useState(null);
+  const [snapshot, setSnapshot] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const active = useRef(false);
+  const requesting = useRef(false);
+  const snapshotRef = useRef(null);
+
+  useEffect(() => {
+    active.current = true;
+    deviceAdapter.getDeviceShelf({ branchId, deviceId, accessToken })
+      .then(value => { if (active.current) setShelfId(value?.id || null); })
+      .catch(() => { if (active.current) setShelfId(null); });
+    deviceAdapter.fetchSnapshot({ branchId, deviceId, accessToken })
+      .then(value => { if (active.current) { snapshotRef.current = value; setSnapshot(value); } })
+      .catch(failure => {
+        if (active.current && failure.status !== 404) setError('No pudimos cargar la foto.');
+      });
+    capture();
+    return () => { active.current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, deviceId, accessToken]);
+
+  async function capture() {
+    if (requesting.current || !branchId || !deviceId) return;
+    requesting.current = true;
+    setLoading(true); setError('');
+    const params = { branchId, deviceId, accessToken };
+    try {
+      await deviceAdapter.requestSnapshot(params);
+      const deadline = Date.now() + 40000;
+      while (active.current && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        if (!active.current) return;
+        let next;
+        try {
+          next = await deviceAdapter.fetchSnapshot(params);
+        } catch (failure) {
+          if (failure.status === 404) continue;
+          throw failure;
+        }
+        if (!active.current) return;
+        const previous = snapshotRef.current;
+        const sameFingerprint = Boolean(next.fingerprint) && next.fingerprint === (previous?.fingerprint || '');
+        const sameTimestamp = Boolean(next.capturedAt) && next.capturedAt === (previous?.capturedAt || '');
+        if (!sameFingerprint || !sameTimestamp) {
+          snapshotRef.current = next;
+          setSnapshot(next);
+          return;
+        }
+      }
+      if (active.current) setError('La foto está tardando. Inténtalo de nuevo.');
+    } catch {
+      if (active.current) setError('No pudimos tomar la foto. Comprueba la cámara.');
+    } finally {
+      requesting.current = false;
+      if (active.current) setLoading(false);
+    }
+  }
+
+  return <View style={S.quick}>
+    <Text style={S.quickHeading}>{cameraName || 'Cámara'}</Text>
+    <View style={S.quickPreview}>
+      {snapshot ? <Image
+        key={snapshot.fingerprint || 'quick'}
+        source={{ uri: snapshot.uri }}
+        accessibilityLabel="Foto actual de la repisa"
+        style={S.quickImage}
+      /> : <View style={S.quickEmpty}>
+        <ActivityIndicator color={C.navy} />
+        <Text style={S.quickEmptyText}>Cargando foto…</Text>
+      </View>}
+    </View>
+    {loading ? <Text style={S.quickNote}>Actualizando la foto…</Text> : null}
+    {error ? <Text style={S.quickError}>{error}</Text> : null}
+    <Primary variant="light" onPress={capture} loading={loading} loadingLabel="Tomando foto…">
+      Tomar otra foto
+    </Primary>
+    {shelfId ? <RoiSummary branchId={branchId} shelfId={shelfId} accessToken={accessToken} /> : null}
+    <Primary onPress={() => {
+      d.selectDevice({ id: deviceId, name: cameraName || 'Cámara', type: 'camera' });
+      go('camera-detail');
+    }}>Ver cámara completa</Primary>
+  </View>;
+}
+
+function CameraList({ branchId, accessToken, go }) {
+  const devices = useData('listDevices');
+  const cameras = (devices.data || []).filter(device => device.type === 'camera');
+  const [selected, setSelected] = useState(null);
+  return <>
+    <LoadState state={devices}>
+      {cameras.map(camera => <Pressable key={camera.id} accessibilityRole="button"
+        accessibilityLabel={`Ver ${camera.name || 'cámara'}`}
+        onPress={() => setSelected(camera)} style={({ pressed }) => [S.row, pressed && S.pressed]}>
+        <Text style={S.rowTitle}>{camera.name || 'Cámara'}</Text>
+        <Text style={S.rowChevron}>›</Text>
+      </Pressable>)}
+      {!cameras.length ? <Info>No hay cámaras registradas en la sucursal. Regístralas desde Dispositivos.</Info> : null}
+    </LoadState>
+    <Sheet visible={!!selected} title={selected?.name || 'Cámara'} onClose={() => setSelected(null)}>
+      {selected ? <CameraQuickView branchId={branchId} deviceId={selected.id} accessToken={accessToken}
+        go={go} cameraName={selected.name} /> : null}
+    </Sheet>
+  </>;
+}
+
+function ShelfBody({ shelf, go, manage, onChanged }) {
+  const d = useDevices();
+  const { accessToken } = useAuth();
+  const detail = useData('readShelf', { shelfId: shelf.id });
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [showCatalog, setShowCatalog] = useState(false);
+  const [showCameras, setShowCameras] = useState(false);
+  const [sheet, setSheet] = useState(null); // { type, id, view, value }
+  const [confirmRemove, setConfirmRemove] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(shelf.name);
+  const [location, setLocation] = useState(shelf.location || '');
+
+  const data = detail.data || {};
+  const products = data.products || [];
+  const lights = data.lights || [];
+  const assignedIds = new Set(products.map(product => product.id));
+  const sheetProduct = sheet?.type === 'product' ? products.find(item => item.id === sheet.id) : null;
+  const sheetLight = sheet?.type === 'light' ? lights.find(item => item.id === sheet.id) : null;
+  const sheetLightProduct = (sheetLight?.products || [])[0];
+
+  function closeSheet() {
+    setSheet(null);
+    setConfirmRemove(null);
+  }
+
+  async function run(key, action) {
+    if (busy) return;
+    setBusy(key); setError(''); setNotice('');
+    try {
+      await action();
+    } catch (failure) {
+      setError(describeError(failure).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  function refresh(message) {
+    setNotice(message);
+    detail.reload();
+    onChanged();
+  }
+
+  function addProduct(productId) {
+    run('add', async () => {
+      await d.mutate('addShelfProduct', { shelfId: shelf.id, productId });
+      setShowCatalog(false);
+      refresh('Producto agregado a la repisa.');
+    });
+  }
+
+  function linkedLight(productId) {
+    return lights.find(light => (light.products || []).some(item => item.id === productId));
+  }
+
+  function removeProduct(product) {
+    const light = linkedLight(product.id);
+    if (light && confirmRemove !== product.id) {
+      setConfirmRemove(product.id);
+      setError('');
+      setNotice('');
+      return;
+    }
+    run(`remove:${product.id}`, async () => {
+      // Primero se retira la asociación (el backend bloquea si hay una guía
+      // activa) y después el producto de la repisa con confirmación explícita.
+      // Así no queda una luz apuntando a un producto que ya no está aquí.
+      if (light) await d.mutate('unassignGuideProduct', { productId: product.id });
+      await d.mutate('removeShelfProduct', {
+        shelfId: shelf.id, productId: product.id, withLight: !!light,
+      });
+      closeSheet();
+      refresh(light ? 'Producto y luz retirados.' : 'Producto retirado de la repisa.');
+    });
+  }
+
+  function assignToLight(light, productId) {
+    run(`assign:${light.id}`, async () => {
+      await d.mutate('assignGuideProduct', {
+        productId, guidePointId: light.id,
+        replaceProductId: sheetLightProduct?.id,
+      });
+      closeSheet();
+      refresh('Producto asociado a la luz.');
+    });
+  }
+
+  function unassignLightProduct(productId) {
+    run(`unassign:${productId}`, async () => {
+      await d.mutate('unassignGuideProduct', { productId });
+      closeSheet();
+      refresh('La luz ya no tiene producto asignado.');
+    });
+  }
+
+  function testLight(light) {
+    run(`test:${light.id}`, async () => {
+      const result = await d.mutate('testLight', {
+        deviceId: light.nodeId, channel: light.channel, durationSeconds: 10,
+      });
+      closeSheet();
+      setNotice(result.status === 'applied'
+        ? `Envío aceptado para ${lightLabel(light)}; comprueba la luz (10 s).`
+        : result.status === 'rejected'
+          ? 'La luz no aceptó la prueba. Comprueba que el canal no esté ocupado.'
+          : 'La luz pudo no encender; comprueba el resultado.');
+    });
+  }
+
+  function saveLight(light) {
+    const value = (sheet?.value || '').trim();
+    if (!value) return;
+    run(`light:${light.id}`, async () => {
+      await d.mutate('updateLight', {
+        deviceId: light.nodeId, lightId: light.id, name: value,
+        shelfId: shelf.id, channel: light.channel,
+      });
+      closeSheet();
+      refresh('Nombre de la luz actualizado.');
+    });
+  }
+
+  function saveShelf() {
+    if (!name.trim()) return;
+    run('shelf', async () => {
+      await d.mutate('updateShelf', { shelfId: shelf.id, name: name.trim(), location: location.trim() || null });
+      setEditing(false);
+      refresh('Repisa actualizada.');
+    });
+  }
+
+  function linkCamera(deviceId) {
+    run('camera', async () => {
+      await d.mutate('linkShelf', { deviceId, shelfId: shelf.id });
+      setShowCameras(false);
+      refresh('Cámara vinculada a la repisa.');
+    });
+  }
+
+  function removeShelf() {
+    run('delete', async () => {
+      await d.mutate('deleteShelf', { shelfId: shelf.id });
+      onChanged();
+    });
+  }
+
+  return <View style={S.body}>
+    <ErrorNotice message={error} />
+    {notice ? <Info title="Listo">{notice}</Info> : null}
+
+    <LoadState state={detail}>
+      <SectionLabel>Productos previstos</SectionLabel>
+      {products.map(product => <Pressable key={product.id} accessibilityRole="button"
+        accessibilityLabel={`Ver opciones de ${product.name}`}
+        onPress={() => setSheet({ type: 'product', id: product.id })}
+        style={({ pressed }) => [S.row, pressed && S.pressed]}>
+        <View style={{ flex: 1 }}>
+          <Text style={S.rowTitle}>{product.name}</Text>
+          <Text style={S.rowDetail}>{`${product.sku || ''} · ${productStatus(product)}`}</Text>
+        </View>
+        <Text style={S.rowChevron}>›</Text>
+      </Pressable>)}
+      {!products.length ? <Info>Aún no hay productos en esta repisa.</Info> : null}
+      {manage ? (!showCatalog
+        ? <Primary variant="light" disabled={!!busy} onPress={() => setShowCatalog(true)}>Agregar producto desde el catálogo</Primary>
+        : <CatalogPicker shelfId={shelf.id} assignedIds={assignedIds} busy={!!busy}
+            onAdd={addProduct} onClose={() => setShowCatalog(false)} />) : null}
+
+      <SectionLabel>Luces guía</SectionLabel>
+      {lights.map(light => <Pressable key={light.id} accessibilityRole="button"
+        accessibilityLabel={`Ver opciones de ${lightLabel(light)}`}
+        onPress={() => setSheet({ type: 'light', id: light.id })}
+        style={({ pressed }) => [S.row, pressed && S.pressed]}>
+        <View style={{ flex: 1 }}>
+          <Text style={S.rowTitle}>{lightLabel(light)}</Text>
+          <Text style={S.rowDetail}>{lightDetail(light)}</Text>
+        </View>
+        <Text style={S.rowChevron}>›</Text>
+      </Pressable>)}
+      {!lights.length ? <Info>Esta repisa no tiene luces guía. Se configuran desde Dispositivos → guía LED.</Info> : null}
+
+      <SectionLabel>Cámaras</SectionLabel>
+      <CameraList branchId={d.branchId} accessToken={accessToken} go={go} />
+      {manage ? (!showCameras
+        ? <Primary variant="light" disabled={!!busy} onPress={() => setShowCameras(true)}>Vincular cámara a esta repisa</Primary>
+        : <CameraPicker shelfId={shelf.id} busy={!!busy} onLink={linkCamera}
+            onClose={() => setShowCameras(false)} />) : null}
+
+      {manage ? <>
+        <SectionLabel>Repisa</SectionLabel>
+        {!editing ? <Primary variant="light" disabled={!!busy} onPress={() => setEditing(true)}>Editar nombre y ubicación</Primary> : <>
+          <FieldCard label="Nombre" value={name} editable={!busy} onChangeText={setName} />
+          <FieldCard label="Ubicación (texto)" value={location} editable={!busy} onChangeText={setLocation} />
+          <Primary disabled={!!busy || !name.trim()} loading={busy === 'shelf'} onPress={saveShelf}>Guardar cambios</Primary>
+          <Primary variant="light" disabled={!!busy} onPress={() => {
+            setEditing(false); setName(shelf.name); setLocation(shelf.location || '');
+          }}>Cancelar</Primary>
+        </>}
+        <Primary variant="danger" disabled={!!busy} loading={busy === 'delete'} onPress={removeShelf}>
+          Eliminar repisa
+        </Primary>
+        <Copy>Si la repisa tiene zonas o luces, el sistema dirá qué lo impide antes de borrarla.</Copy>
+      </> : null}
+    </LoadState>
+
+    <Sheet visible={!!sheetProduct} title={sheetProduct?.name || ''}
+      subtitle={sheetProduct ? `${sheetProduct.sku || ''} · ${productStatus(sheetProduct)}` : ''}
+      onClose={closeSheet}>
+      {sheetProduct ? <>
+        {linkedLight(sheetProduct.id)
+          ? <Copy>{`Está en ${lightLabel(linkedLight(sheetProduct.id))}`}</Copy> : null}
+        {manage && !sheetProduct.physicalConfigured
+          ? <Primary variant="light" onPress={() => {
+              closeSheet();
+              go('products', { productId: sheetProduct.id });
+            }}>Completar tamaño y posición</Primary> : null}
+        {manage && confirmRemove === sheetProduct.id ? <>
+          <Info title="Este producto tiene una luz asociada">
+            Si lo quitas solo de la repisa, la luz seguiría apuntando a un producto que ya no está aquí.
+          </Info>
+          <Primary variant="danger" disabled={!!busy} loading={busy === `remove:${sheetProduct.id}`}
+            onPress={() => removeProduct(sheetProduct)}>Quitar repisa y luz</Primary>
+          <Primary variant="light" disabled={!!busy} onPress={() => setConfirmRemove(null)}>Cancelar</Primary>
+        </> : manage ? <Primary variant="danger" disabled={!!busy}
+          onPress={() => removeProduct(sheetProduct)}>Quitar de la repisa</Primary> : null}
+      </> : null}
+    </Sheet>
+
+    <Sheet visible={!!sheetLight && sheet?.view !== 'products' && sheet?.view !== 'name'}
+      title={sheetLight ? lightLabel(sheetLight) : ''} subtitle={sheetLight ? lightDetail(sheetLight) : ''}
+      onClose={closeSheet}>
+      {sheetLight ? <>
+        <Primary disabled={!!busy} loading={busy === `test:${sheetLight.id}`}
+          onPress={() => testLight(sheetLight)}>Encender 10 s</Primary>
+        {manage ? <Primary variant="light" disabled={!!busy}
+          onPress={() => setSheet({ ...sheet, view: 'products' })}>
+          {sheetLightProduct ? 'Cambiar producto' : 'Asignar producto'}
+        </Primary> : null}
+        {manage && sheetLightProduct ? <Primary variant="light" disabled={!!busy}
+          onPress={() => unassignLightProduct(sheetLightProduct.id)}>Dejar sin producto</Primary> : null}
+        {manage ? <Primary variant="light" disabled={!!busy}
+          onPress={() => setSheet({ ...sheet, view: 'name', value: sheetLight.name || '' })}>Cambiar nombre</Primary> : null}
+      </> : null}
+    </Sheet>
+
+    <Sheet visible={sheet?.type === 'light' && sheet?.view === 'products'}
+      title="Elige un producto" subtitle={sheetLight ? lightLabel(sheetLight) : ''} onClose={closeSheet}>
+      {products.filter(product => product.id !== sheetLightProduct?.id).map(product =>
+        <Pressable key={product.id} accessibilityRole="button"
+          accessibilityLabel={`Asociar ${product.name}`} disabled={!!busy}
+          onPress={() => assignToLight(sheetLight, product.id)}
+          style={({ pressed }) => [S.row, pressed && S.pressed]}>
+          <View style={{ flex: 1 }}>
+            <Text style={S.rowTitle}>{product.name}</Text>
+            <Text style={S.rowDetail}>{product.sku}</Text>
+          </View>
+          <Text style={S.rowChevron}>›</Text>
+        </Pressable>)}
+      {!products.length ? <Info>Agrega el producto a la repisa antes de asignarlo a una luz.</Info> : null}
+    </Sheet>
+
+    <Sheet visible={sheet?.type === 'light' && sheet?.view === 'name'}
+      title="Nombre de la luz" onClose={closeSheet}>
+      {sheetLight ? <>
+        <FieldCard label="Nombre" value={sheet.value || ''} editable={!busy}
+          onChangeText={value => setSheet({ ...sheet, value })} />
+        <Primary disabled={!!busy || !(sheet.value || '').trim()} loading={busy === `light:${sheetLight.id}`}
+          onPress={() => saveLight(sheetLight)}>Guardar nombre</Primary>
+      </> : null}
+    </Sheet>
+  </View>;
+}
+
+function ShelfCard({ shelf, expanded, onToggle, go, manage, onChanged }) {
+  return <View style={S.card}>
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded }}
+      accessibilityLabel={`${expanded ? 'Contraer' : 'Expandir'} ${shelf.name}`}
+      onPress={onToggle} style={({ pressed }) => [S.cardHead, pressed && S.pressed]}>
+      <View style={{ flex: 1 }}>
+        <Text style={S.cardTitle}>{shelf.name}</Text>
+        <Text style={S.cardDetail}>{shelf.location || 'Sin ubicación textual'}</Text>
+      </View>
+      <Text style={S.chevron}>{expanded ? '⌄' : '›'}</Text>
+    </Pressable>
+    <View style={S.badges}>
+      <Badge>{`${shelf.productCount} productos`}</Badge>
+      <Badge muted={!shelf.lightCount}>{shelf.lightCount ? `${shelf.lightCount} LED` : 'Sin LED'}</Badge>
+      <Badge muted={!shelf.cameraName}>{shelf.cameraName ? `Cámara: ${shelf.cameraName}` : 'Sin cámara'}</Badge>
+    </View>
+    {expanded ? <ShelfBody shelf={shelf} go={go} manage={manage} onChanged={onChanged} /> : null}
+  </View>;
+}
+
+export default function ShelvesScreen({ go, params }) {
+  const d = useDevices();
+  const { user } = useAuth();
+  const manage = canManage(user);
   const state = useData('listShelves');
+  const [openId, setOpenId] = useState(params?.shelfId || null);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
-  const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
   const [busy, setBusy] = useState(false);
@@ -96,39 +535,76 @@ export default function ShelvesScreen({ go }) {
     if (busy || !name.trim()) return;
     setBusy(true); setError(''); setSaved('');
     try {
-      await d.mutate('createBranchShelf', { name: name.trim(), location: location.trim() || null });
+      const result = await d.mutate('createBranchShelf', { name: name.trim(), location: location.trim() || null });
       setName(''); setLocation(''); setShowForm(false);
-      setSaved('Repisa creada. Ahora agrega los productos previstos.');
+      setSaved('Repisa creada. Ábrela para agregar productos.');
+      if (result?.id) setOpenId(result.id);
       state.reload();
     } catch (failure) {
       setError(describeError(failure).message);
     } finally { setBusy(false); }
   }
 
-  if (selected) return <ShelfDetail shelfId={selected} go={go} onBack={() => setSelected(null)} />;
-
-  return <Shell go={go} title="Estantes" subtitle="Crea repisas y define qué producto se espera en cada una">
+  return <Shell go={go} title="Estantes"
+    subtitle={manage ? 'Repisas, productos, luces y cámara en un solo lugar' : 'Consulta repisas, productos y luces'}>
     <ErrorNotice message={error} />
     {saved ? <Info title="Listo">{saved}</Info> : null}
 
-    {!showForm ? <Primary variant="light" onPress={() => setShowForm(true)}>Crear repisa</Primary> : <>
-      <SectionLabel>Nueva repisa</SectionLabel>
-      <FieldCard label="Nombre" value={name} onChangeText={setName} placeholder="Ej. Repisa 1" />
-      <FieldCard label="Ubicación (texto)" value={location} onChangeText={setLocation} placeholder="Ej. Pasillo central, lado izquierdo" />
-      <Primary onPress={create} loading={busy} disabled={!name.trim()}>Guardar repisa</Primary>
-      <Primary variant="light" onPress={() => setShowForm(false)}>Cancelar</Primary>
-    </>}
+    {manage ? (!showForm
+      ? <Primary variant="light" onPress={() => setShowForm(true)}>Crear repisa</Primary>
+      : <>
+        <SectionLabel>Nueva repisa</SectionLabel>
+        <FieldCard label="Nombre" value={name} onChangeText={setName} placeholder="Ej. Repisa 1" />
+        <FieldCard label="Ubicación (texto)" value={location} onChangeText={setLocation} placeholder="Ej. Pasillo central, lado izquierdo" />
+        <Primary onPress={create} loading={busy} disabled={!name.trim()}>Guardar repisa</Primary>
+        <Primary variant="light" onPress={() => setShowForm(false)}>Cancelar</Primary>
+      </>) : null}
 
     <SectionLabel>Repisas de la sucursal</SectionLabel>
     <LoadState state={state}>
-      {(state.data || []).map(shelf => <NavRow key={shelf.id}
-        label={shelf.name} detail={shelf.location || 'Sin ubicación'}
-        onPress={() => setSelected(shelf.id)} />)}
+      {(state.data || []).map(shelf => <ShelfCard key={shelf.id} shelf={shelf} manage={manage} go={go}
+        expanded={openId === shelf.id} onChanged={state.reload}
+        onToggle={() => setOpenId(openId === shelf.id ? null : shelf.id)} />)}
       {!(state.data || []).length ? <Info>No hay repisas registradas. Crea la primera para empezar.</Info> : null}
     </LoadState>
 
-    <Info title="Antes de instalar hardware">
-      <Copy>Primero crea y configura el producto en Productos, luego asígnalo a una repisa. La cámara y las luces se vinculan después desde Dispositivos.</Copy>
+    <Info title="Antes de empezar">
+      Primero crea el producto en Productos y luego agrégalo a la repisa. La cámara solo se conecta cuando cada producto ya tiene anotados su tamaño y su posición.
     </Info>
   </Shell>;
 }
+
+const S = StyleSheet.create({
+  card: { backgroundColor: C.field, borderRadius: 16, padding: 16, gap: 10, borderWidth: 1, borderColor: C.border },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pressed: { opacity: 0.7 },
+  cardTitle: { color: C.navy, fontSize: 17, fontWeight: '600' },
+  cardDetail: { color: C.muted, fontSize: 13, marginTop: 2 },
+  chevron: { color: C.muted, fontSize: 22 },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  badge: { backgroundColor: C.blue, color: C.navy, fontSize: 12, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, overflow: 'hidden' },
+  badgeMuted: { backgroundColor: C.border, color: C.muted },
+  body: { gap: 12, paddingTop: 4 },
+  rowTitle: { color: C.text, fontSize: 15, fontWeight: '500' },
+  rowDetail: { color: C.muted, fontSize: 13 },
+  rowChevron: { color: C.muted, fontSize: 20 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border },
+  rowAction: { color: C.navy, fontSize: 13, fontWeight: '600' },
+  sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: C.field, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, gap: 12 },
+  sheetTitle: { color: C.navy, fontSize: 18, fontWeight: '700' },
+  sheetSubtitle: { color: C.muted, fontSize: 13 },
+  sheetActions: { gap: 8 },
+  quick: { gap: 12 },
+  quickHeading: { color: C.navy, fontSize: 17, fontWeight: '600' },
+  quickPreview: { backgroundColor: C.border, borderRadius: 16, overflow: 'hidden', aspectRatio: 4 / 3, justifyContent: 'center' },
+  quickImage: { width: '100%', height: '100%', resizeMode: 'contain' },
+  quickEmpty: { padding: 16, alignItems: 'center', gap: 8 },
+  quickEmptyText: { color: C.muted, fontSize: 14 },
+  quickNote: { color: C.muted, fontSize: 13 },
+  quickError: { color: C.danger, fontSize: 13 },
+  roiSummary: { gap: 6 },
+  roiRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: C.border },
+  roiName: { color: C.text, fontSize: 14, flex: 1 },
+  roiValue: { color: C.navy, fontSize: 18, fontWeight: '700' },
+});

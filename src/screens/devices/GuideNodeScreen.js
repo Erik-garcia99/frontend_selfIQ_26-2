@@ -36,8 +36,12 @@ export default function GuideNodeScreen({ go }) {
           {light ? <>
             <Copy>{`${light.name} · ${light.shelfName || 'Sin estante asignado'}`}</Copy>
             <Copy>{products.length ? products.map(row => `${row.productName}${row.sku ? ` (${row.sku})` : ''}`).join(', ') : 'Ningún producto asociado.'}</Copy>
-            <Primary variant="light" onPress={() => { d.setDraft(light); go('guide-products'); }}>
-              {products.length ? 'Cambiar o quitar producto' : 'Asignar producto'}
+            <Primary variant="light" onPress={() => {
+              // La asignación producto↔LED vive ahora en el hub de la repisa.
+              if (light.shelfId) d.setDraft({ shelfId: light.shelfId });
+              go('shelves', light.shelfId ? { shelfId: light.shelfId } : undefined);
+            }}>
+              {products.length ? 'Cambiar producto en la repisa' : 'Asignar producto en la repisa'}
             </Primary>
             <Primary variant="light" onPress={() => { d.setDraft({ ...light, mode: 'edit' }); go('edit-light'); }}>Editar nombre / estante</Primary>
           </> : <Primary disabled={!channel.available} onPress={() => configure(channel)}>Configurar LED {channel.id + 1}</Primary>}

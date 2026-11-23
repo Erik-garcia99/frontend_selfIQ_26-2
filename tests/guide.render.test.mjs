@@ -77,7 +77,7 @@ function setup() {
     listLightChannels: Array.from({ length: 8 }, (_, id) => ({ id, available: id !== 2 })),
     listGuideAssociations: [{ guidePointId: 'light-3', productId: 'old', productName: 'Agua' }],
     listProducts: [{ id: 'old', name: 'Agua' }, { id: 'new', name: 'Pan' }],
-    listShelfProducts: [{ id: 'old', name: 'Agua' }],
+    listShelfGuideProducts: [{ id: 'old', name: 'Agua' }],
     listShelves: [{ id: 'shelf-3', name: 'Estante 3' }],
   };
 }
@@ -87,7 +87,7 @@ test('muestra los 8 LED aunque solo haya uno configurado, con producto y accione
   const html = render(NodeScreen);
   for (let number = 1; number <= 8; number++) assert.ok(html.includes(`LED ${number}`));
   assert.ok(html.includes('Agua'));
-  assert.ok(html.includes('Cambiar o quitar producto'));
+  assert.ok(html.includes('Cambiar producto en la repisa'));
   assert.ok(html.includes('Configurar LED 4'));
   assert.ok(html.includes('8 LED · 1 ocupados · 0 configurados sin producto · 7 sin configurar'));
 });
@@ -100,7 +100,7 @@ test('los ocho ocupados se pueden reutilizar sin agregar un noveno', () => {
   }));
   const html = render(NodeScreen);
   assert.ok(html.includes('Todos los LED están configurados'));
-  assert.equal((html.match(/>Cambiar o quitar producto<\/button>/g) || []).length, 8);
+  assert.equal((html.match(/>Cambiar producto en la repisa<\/button>/g) || []).length, 8);
   assert.ok(!html.includes('Configurar LED 9'));
 });
 
@@ -139,7 +139,7 @@ test('configurar conserva el LED elegido y muestra solo productos del estante', 
 test('el estante vacío se explica sin ofrecer productos de otro estante', () => {
   setup();
   draft = { channel: 3, name: 'Luz 4', shelfId: 'shelf-3' };
-  data.listShelfProducts = [];
+  data.listShelfGuideProducts = [];
   const html = render(AddScreen);
   assert.ok(html.includes('Este estante todavía no tiene productos asociados a la guía'));
   assert.ok(html.includes('Elegir otro producto del catálogo'));
@@ -211,7 +211,7 @@ test('si falla la asociación se informa y reintentar no crea otro LED', async (
 
 test('configurar un LED sin cámara ni ROI permite asociar directamente un producto del catálogo', async () => {
   setup();
-  data.listShelfProducts = [];
+  data.listShelfGuideProducts = [];
   data.listGuideAssociations = [];
   draft = { channel: 3, name: 'Luz 4', shelfId: 'shelf-3' };
   const screen = interactiveAdd(() => {});

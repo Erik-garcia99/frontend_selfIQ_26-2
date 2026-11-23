@@ -12,10 +12,21 @@ const expoRequire = createRequire(require.resolve('expo/package.json'));
 const { transformSync } = expoRequire('@babel/core');
 
 const data = {
-  listShelves: [{ id: 's1', name: 'Repisa A', location: 'Pasillo 1' }],
+  listShelves: [{
+    id: 's1', name: 'Repisa A', location: 'Pasillo 1',
+    productCount: 1, lightCount: 1, cameraName: null, cameraNodeId: null,
+  }],
   listShelfProducts: [{ id: 'p1', sku: 'SKU-1', name: 'Leche', physicalConfigured: false }],
   listProducts: [{ id: 'p2', sku: 'SKU-2', name: 'Pan', physicalConfigured: true }],
-  readShelf: { id: 's1', name: 'Repisa A', location: 'Pasillo 1', products: [], lights: [] },
+  listDevices: [{ id: 'cam1', name: 'Cámara 1', type: 'camera' }],
+  readShelf: {
+    id: 's1', name: 'Repisa A', location: 'Pasillo 1', cameraNodeId: null, cameraName: null,
+    products: [{ id: 'p1', sku: 'SKU-1', name: 'Leche', physicalConfigured: false }],
+    lights: [{
+      id: 'l1', name: 'Luz 1', channel: 0, nodeId: 'n1',
+      products: [{ id: 'p1', name: 'Leche', sku: 'SKU-1' }],
+    }],
+  },
 };
 const wrap = ({ children }) => React.createElement('div', null, children);
 const ui = {
@@ -37,8 +48,16 @@ function load(name) {
   mod.paths = Module._nodeModulePaths(dirname(filename));
   mod.require = id => {
     if (id === './DeviceUI') return ui;
+    if (id === './RoiOccupancyPanel') return () => null;
+    if (id === '../../services/deviceAdapter') return { deviceAdapter: {} };
+    if (id === '../../utils/useRoiOccupancy.js') return { useRoiOccupancy: () => ({ label: '', now: 0 }) };
+    if (id === '../../utils/roiOccupancy.js') return { roiOccupancyPresentation: () => ({ label: '' }) };
     if (id === 'react') return React;
+    if (id === 'react-native') return rn;
     if (id === '../../utils/errorMessages') return { describeError: error => ({ message: error.message }) };
+    if (id === '../../context/AuthContext') return { useAuth: () => ({ user: { role: 'owner' } }) };
+    if (id === '../../utils/validation') return { canManage: () => true };
+    if (id === '../../theme/colors') return { colors: { field: '#fff', border: '#ddd', navy: '#001D39', muted: '#587991', text: '#0A4174', blue: '#7BBDE8' } };
     return require(id);
   };
   const { code } = transformSync(readFileSync(filename, 'utf8'), {
@@ -51,6 +70,21 @@ function load(name) {
   mod._compile(code, filename);
   return mod.exports.default;
 }
+
+const domProps = props => Object.fromEntries(
+  Object.entries(props).filter(([key]) => !key.startsWith('accessibility')),
+);
+const rn = {
+  StyleSheet: { create: styles => styles },
+  ActivityIndicator: () => null,
+  Image: () => null,
+  Modal: ({ children, visible }) => visible ? React.createElement('div', null, children) : null,
+  Pressable: ({ children, style, ...props }) => React.createElement('div', {
+    ...domProps(props), style: typeof style === 'function' ? style({ pressed: false }) : style,
+  }, typeof children === 'function' ? children({ pressed: false }) : children),
+  Text: ({ children, ...props }) => React.createElement('span', domProps(props), children),
+  View: ({ children, ...props }) => React.createElement('div', domProps(props), children),
+};
 
 const source = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -70,15 +104,67 @@ test('la ruta shelves está cableada y el Panel ofrece el mosaico', () => {
   assert.ok(panel.includes("go('shelves')"));
 });
 
-test('Pantalla de estantes: alta y aviso de configuración física antes de hardware', () => {
+test('Pantalla de estantes: alta y aviso en lenguaje sencillo', () => {
   const Shelves = load('ShelvesScreen');
   const markup = renderToStaticMarkup(React.createElement(Shelves, { go: () => {} }));
   assert.ok(markup.includes('Crear repisa'));
   assert.ok(markup.includes('Repisa A'));
-  assert.ok(markup.includes('Antes de instalar hardware'));
+  assert.ok(markup.includes('Antes de empezar'));
+  assert.ok(markup.includes('tamaño y su posición'));
   const screen = source('../src/screens/devices/ShelvesScreen.js');
   assert.ok(screen.includes('physicalConfigured'));
-  assert.ok(screen.includes('sin orientación ni medidas'));
+  assert.ok(!screen.includes('Antes de instalar hardware'), 'Sin tecnicismos en el aviso');
+  assert.ok(!screen.includes('sin orientación ni medidas'));
+});
+
+test('el hub expande productos, luces y cámara sin pantalla de detalle', () => {
+  const Shelves = load('ShelvesScreen');
+  const markup = renderToStaticMarkup(React.createElement(Shelves, { go: () => {}, params: { shelfId: 's1' } }));
+  assert.ok(markup.includes('1 productos'));
+  assert.ok(markup.includes('1 LED'));
+  assert.ok(markup.includes('Sin cámara'));
+  assert.ok(markup.includes('Productos previstos'));
+  assert.ok(markup.includes('Leche'));
+  assert.ok(markup.includes('LED 1 · Luz 1'));
+  assert.ok(markup.includes('Vincular cámara'));
+  assert.ok(markup.includes('Editar nombre y ubicación'));
+  assert.ok(!markup.includes('Seleccionar estante'), 'El hub no vuelve a pedir estante');
+  const screen = source('../src/screens/devices/ShelvesScreen.js');
+  assert.ok(screen.includes('withLight: !!light'), 'Quitar con LED requiere confirmación explícita');
+  assert.ok(screen.includes('Inactivo'), 'Los productos inactivos se muestran, no se ocultan');
+});
+
+test('productos y luces son filas simples; las acciones aparecen al tocar', () => {
+  const Shelves = load('ShelvesScreen');
+  const markup = renderToStaticMarkup(React.createElement(Shelves, { go: () => {}, params: { shelfId: 's1' } }));
+  assert.ok(markup.includes('Falta medir'), 'Dato corto del producto en la fila');
+  assert.ok(markup.includes('Leche'), 'Dato corto de la luz en la fila');
+  assert.ok(!markup.includes('Encender 10 s'), 'La prueba de luz no está en la fila');
+  assert.ok(!markup.includes('Cambiar nombre'), 'La edición no está en la fila');
+  assert.ok(!markup.includes('Quitar de la repisa'), 'La baja no está en la fila');
+  const screen = source('../src/screens/devices/ShelvesScreen.js');
+  assert.ok(screen.includes("setSheet({ type: 'product'"));
+  assert.ok(screen.includes("setSheet({ type: 'light'"));
+  assert.ok(screen.includes("view: 'products'"));
+  assert.ok(screen.includes("view: 'name'"));
+  assert.ok(screen.includes('<Modal'), 'Las acciones viven en un panel emergente');
+});
+
+test('Estantes lista solo nombres de cámaras; el detalle abre en panel', () => {
+  const Shelves = load('ShelvesScreen');
+  const markup = renderToStaticMarkup(React.createElement(Shelves, { go: () => {}, params: { shelfId: 's1' } }));
+  assert.ok(markup.includes('Cámara 1'), 'La lista muestra el nombre de la cámara');
+  assert.ok(!markup.includes('Ocupación visual por zona'), 'Sin texto basura en la lista');
+  const screen = source('../src/screens/devices/ShelvesScreen.js');
+  assert.ok(screen.includes('CameraList'), 'Lista de cámaras de la sucursal');
+  assert.ok(screen.includes('<Sheet visible={!!selected}'), 'El detalle se abre al tocar');
+  assert.ok(screen.includes('CameraQuickView'));
+  assert.ok(screen.includes('requestSnapshot('), 'La foto se pide automáticamente al entrar');
+  assert.ok(screen.includes('RoiSummary'), 'Resumen propio, sin tocar el panel existente');
+  assert.ok(!screen.includes('RoiOccupancyPanel'), 'No usa el panel completo');
+  assert.ok(screen.includes("go('camera-detail')"), 'El botón abre la cámara completa ya existente');
+  assert.ok(screen.includes('Ver cámara completa'));
+  assert.ok(!screen.includes('Ver zonas (ROI)'));
 });
 
 test('La cámara exige configuración física y permite ligar una repisa existente', () => {

@@ -101,8 +101,14 @@ export function Primary({ children, onPress, loading = false, disabled = false, 
 
 export function Info({ title, text, children }) {
   const content = children ?? text;
+  const nodes = Array.isArray(content) ? content : [content];
   return <View style={L.cardSoft}>{title ? <Text style={L.cardTitle}>{title}</Text> : null}
-    {typeof content === 'string' ? <Text style={L.cardText}>{content}</Text> : content}</View>;
+    {nodes.map((node, index) => {
+      if (typeof node === 'number' || (typeof node === 'string' && node.trim())) {
+        return <Text key={`info-text-${index}`} style={L.cardText}>{node}</Text>;
+      }
+      return typeof node === 'string' ? null : node;
+    })}</View>;
 }
 
 export function LinkButton({ children, onPress, align = 'center' }) {

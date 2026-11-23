@@ -20,7 +20,7 @@ export default function PanelScreen({ go }) {
   const { user } = useAuth();
   const d = useDevices();
   const access = visiblePanelSections(user);
-  const hasAdminTools = access.operations || access.approve || access.tokens || access.branch;
+  const hasAdminTools = access.operations || access.approve || access.tokens || access.logs || access.branch;
   return <View style={styles.appPage}>
     <ScrollView contentContainerStyle={styles.panelContent}>
       <View style={styles.homeHeader}>
@@ -32,6 +32,7 @@ export default function PanelScreen({ go }) {
       <View style={styles.panelGrid}>
         <PanelTile title="Control de LED" detail="Productos asociados · ON / OFF" icon={frameIcons.shelves}
           onPress={() => { d.setDraft({ controlBack: 'panel' }); go('test-product-light'); }} />
+        <PanelTile title="Estantes" detail="Productos, luces y cámara de cada repisa." icon={frameIcons.shelves} onPress={() => go('shelves')} />
       </View>
 
       {access.operations ? <>
@@ -39,15 +40,15 @@ export default function PanelScreen({ go }) {
         <View style={styles.panelGrid}>
           <PanelTile title="Dispositivos" detail="Equipos, búsqueda y configuración." icon={navIcons.settings} onPress={() => go('devices')} />
           <PanelTile title="Productos" detail="Catálogo usado por estantes y cámaras." icon={frameIcons.inventory} onPress={() => go('products')} />
-          <PanelTile title="Estantes" detail="Crea repisas y asigna productos." icon={frameIcons.shelves} onPress={() => go('shelves')} />
         </View>
       </> : null}
 
-      {access.approve || access.tokens || access.branch ? <>
-        <Text style={styles.homeSectionLabel}>Personal y acceso</Text>
+      {access.approve || access.tokens || access.logs || access.branch ? <>
+        <Text style={styles.homeSectionLabel}>Personal y registro</Text>
         <View style={styles.panelGrid}>
           {access.approve ? <PanelTile title="Aprobar usuarios" detail="Revisa cuentas pendientes." icon={navIcons.panel} onPress={() => go('approve')} /> : null}
           {access.tokens ? <PanelTile title="Tokens" detail="Administra accesos de registro." icon={navIcons.settings} onPress={() => go('tokens')} /> : null}
+          {access.logs ? <PanelTile title="Bitácora" detail="Consulta y descarga lo ocurrido en la sucursal." icon={navIcons.panel} onPress={() => go('logs')} /> : null}
           {access.branch ? <PanelTile title="Nueva sucursal" detail="Agrega otra tienda a la empresa." icon={frameIcons.shelves} onPress={() => go('branch')} /> : null}
         </View>
       </> : null}

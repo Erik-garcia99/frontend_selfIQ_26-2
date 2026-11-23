@@ -8,7 +8,7 @@ export default function GuideProductsScreen({ go }) {
   const lightId = d.draft?.id;
   const lights = lightsState.data?.lights || [];
   const chosen = lights.find(light => light.id === lightId);
-  const productsState = useData('listShelfProducts', { shelfId: chosen?.shelfId });
+  const productsState = useData('listShelfGuideProducts', { shelfId: chosen?.shelfId });
   const catalogue = useData('listProducts');
   const [productId, setProductId] = useState(null);
   const [busy, setBusy] = useState(false);

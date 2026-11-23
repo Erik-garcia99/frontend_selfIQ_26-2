@@ -14,7 +14,7 @@ export default function GuideScreen({ go }) {
     {!declared && <Info>{`Capacidad aún no declarada por el nodo. Puedes configurar luces en los ${LIGHT_LIMIT} canales lógicos; la guía no se activará hasta que el firmware informe su capacidad.`}</Info>}
     {lights.map(light => <NavRow key={light.id} label={light.name || 'Luz sin nombre'} detail={light.shelfName || 'Sin estante asignado'} onPress={() => { d.setDraft({ ...light, mode: 'edit' }); go('edit-light'); }} />)}
     {!lights.length && <Info>Agrega una luz y elige el estante que señalará.</Info>}
-    <Primary variant="light" disabled={!lights.length} onPress={() => go('guide-products')}>Asociar productos a las luces</Primary>
+    <Primary variant="light" disabled={!lights.length} onPress={() => go('shelves')}>Asociar productos desde las repisas</Primary>
     <Primary disabled={full} onPress={() => { d.setDraft({ name: '', shelfId: null, channel: null, mode: 'add' }); go('add-light'); }}>+ Agregar luz</Primary>
     <Copy>{full ? `Llegaste al límite de ${capacity} luces de esta guía.` : 'Cada luz puede señalar un estante diferente.'}</Copy>
     <Primary variant="light" disabled={!guide?.id} onPress={() => { d.selectDevice(guide); go('edit-device'); }}>Editar datos</Primary>

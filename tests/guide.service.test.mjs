@@ -116,6 +116,11 @@ assert.deepEqual(await service.deviceRequest('listShelfProducts', { branchId: 'b
 ]);
 assert.equal(shelfRequest, '/branches/b/shelves/s%2F3/products');
 shelfRequest = null;
+assert.deepEqual(await service.deviceRequest('listShelfGuideProducts', { branchId: 'b' }, { shelfId: 's/3' }), [
+  { id: 'product-1', name: 'Agua', sku: 'SKU-1', active: true },
+]);
+assert.equal(shelfRequest, '/branches/b/shelves/s%2F3/guide-products');
+shelfRequest = null;
 assert.deepEqual(await service.deviceRequest('listShelfProducts', { branchId: 'b' }), []);
 assert.equal(shelfRequest, null);
 
@@ -133,7 +138,7 @@ assert.equal(typeof adapter.deviceAdapter.listGuideAssociations, 'function');
 assert.equal(typeof adapter.deviceAdapter.assignGuideProduct, 'function');
 assert.equal(typeof adapter.deviceAdapter.unassignGuideProduct, 'function');
 assert.match(read('screens/devices/GuideNodeScreen.js'), /listGuideAssociations/);
-assert.match(read('screens/devices/GuideNodeScreen.js'), /guide-products/);
+assert.match(read('screens/devices/GuideNodeScreen.js'), /go\('shelves'/);
 assert.match(read('app/AppNavigator.js'), /guide: GuideNode/);
 
 // Nodos agrupados por tipo y de 5 en 5, en una sola lista.
