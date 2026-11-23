@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Shell, Copy, ErrorNotice, FieldCard, Info, LoadState, Primary, SectionLabel, useData, useDevices,
 } from './DeviceUI';
@@ -18,6 +18,31 @@ function Badge({ children, muted = false }) {
 
 function lightLabel(light) {
   return `LED ${(light.channel ?? 0) + 1}${light.name ? ` · ${light.name}` : ''}`;
+}
+
+function productStatus(product) {
+  if (product.active === false) return 'Inactivo';
+  return product.physicalConfigured ? 'Listo' : 'Falta medir';
+}
+
+function lightDetail(light) {
+  const current = (light.products || [])[0];
+  return current ? current.name : 'Sin producto';
+}
+
+// Panel de acciones: mantiene la pantalla limpia y deja las opciones para
+// cuando la persona toca la fila que le interesa.
+function Sheet({ visible, title, subtitle, onClose, children }) {
+  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Pressable style={S.sheetBackdrop} onPress={onClose}>
+      <View style={S.sheet}>
+        <Text style={S.sheetTitle}>{title}</Text>
+        {subtitle ? <Text style={S.sheetSubtitle}>{subtitle}</Text> : null}
+        <View style={S.sheetActions}>{children}</View>
+        <Primary variant="light" onPress={onClose}>Cerrar</Primary>
+      </View>
+    </Pressable>
+  </Modal>;
 }
 
 function CatalogPicker({ shelfId, assignedIds, onAdd, onClose, busy }) {
@@ -71,17 +96,24 @@ function ShelfBody({ shelf, go, manage, onChanged }) {
   const [notice, setNotice] = useState('');
   const [showCatalog, setShowCatalog] = useState(false);
   const [showCameras, setShowCameras] = useState(false);
-  const [picker, setPicker] = useState(null); // { lightId, replaceProductId }
+  const [sheet, setSheet] = useState(null); // { type, id, view, value }
   const [confirmRemove, setConfirmRemove] = useState(null);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(shelf.name);
   const [location, setLocation] = useState(shelf.location || '');
-  const [editLight, setEditLight] = useState(null); // { id, value }
 
   const data = detail.data || {};
   const products = data.products || [];
   const lights = data.lights || [];
   const assignedIds = new Set(products.map(product => product.id));
+  const sheetProduct = sheet?.type === 'product' ? products.find(item => item.id === sheet.id) : null;
+  const sheetLight = sheet?.type === 'light' ? lights.find(item => item.id === sheet.id) : null;
+  const sheetLightProduct = (sheetLight?.products || [])[0];
+
+  function closeSheet() {
+    setSheet(null);
+    setConfirmRemove(null);
+  }
 
   async function run(key, action) {
     if (busy) return;
@@ -129,27 +161,27 @@ function ShelfBody({ shelf, go, manage, onChanged }) {
       await d.mutate('removeShelfProduct', {
         shelfId: shelf.id, productId: product.id, withLight: !!light,
       });
-      setConfirmRemove(null);
-      refresh(light ? 'Producto y asociación del LED retirados.' : 'Producto retirado de la repisa.');
+      closeSheet();
+      refresh(light ? 'Producto y luz retirados.' : 'Producto retirado de la repisa.');
     });
   }
 
   function assignToLight(light, productId) {
-    const current = (light.products || [])[0];
     run(`assign:${light.id}`, async () => {
       await d.mutate('assignGuideProduct', {
         productId, guidePointId: light.id,
-        replaceProductId: current?.id,
+        replaceProductId: sheetLightProduct?.id,
       });
-      setPicker(null);
-      refresh('Producto asociado al LED.');
+      closeSheet();
+      refresh('Producto asociado a la luz.');
     });
   }
 
   function unassignLightProduct(productId) {
     run(`unassign:${productId}`, async () => {
       await d.mutate('unassignGuideProduct', { productId });
-      refresh('Asociación del LED retirada.');
+      closeSheet();
+      refresh('La luz ya no tiene producto asignado.');
     });
   }
 
@@ -158,23 +190,24 @@ function ShelfBody({ shelf, go, manage, onChanged }) {
       const result = await d.mutate('testLight', {
         deviceId: light.nodeId, channel: light.channel, durationSeconds: 10,
       });
+      closeSheet();
       setNotice(result.status === 'applied'
-        ? `Envío aceptado para ${lightLabel(light)}; comprueba el LED (10 s).`
+        ? `Envío aceptado para ${lightLabel(light)}; comprueba la luz (10 s).`
         : result.status === 'rejected'
-          ? 'El nodo rechazó la prueba. Comprueba que el canal no esté en otra guía.'
-          : 'El nodo no confirmó la prueba; el LED pudo no encender.');
+          ? 'La luz no aceptó la prueba. Comprueba que el canal no esté ocupado.'
+          : 'La luz pudo no encender; comprueba el resultado.');
     });
   }
 
   function saveLight(light) {
-    const value = (editLight?.value || '').trim();
+    const value = (sheet?.value || '').trim();
     if (!value) return;
     run(`light:${light.id}`, async () => {
       await d.mutate('updateLight', {
         deviceId: light.nodeId, lightId: light.id, name: value,
         shelfId: shelf.id, channel: light.channel,
       });
-      setEditLight(null);
+      closeSheet();
       refresh('Nombre de la luz actualizado.');
     });
   }
@@ -209,76 +242,33 @@ function ShelfBody({ shelf, go, manage, onChanged }) {
 
     <LoadState state={detail}>
       <SectionLabel>Productos previstos</SectionLabel>
-      {products.map(product => {
-        const light = linkedLight(product.id);
-        const confirming = confirmRemove === product.id;
-        return <View key={product.id} style={S.block}>
+      {products.map(product => <Pressable key={product.id} accessibilityRole="button"
+        accessibilityLabel={`Ver opciones de ${product.name}`}
+        onPress={() => setSheet({ type: 'product', id: product.id })}
+        style={({ pressed }) => [S.row, pressed && S.pressed]}>
+        <View style={{ flex: 1 }}>
           <Text style={S.rowTitle}>{product.name}</Text>
-          <Text style={S.rowDetail}>{`${product.sku} · ${product.active === false
-            ? 'Inactivo' : product.physicalConfigured ? 'Configurado' : 'Sin configurar'}`}</Text>
-          {light ? <Copy>{`Asociado a ${lightLabel(light)}`}</Copy> : null}
-          {manage ? <View style={S.actions}>
-            {!product.physicalConfigured ? <Primary variant="light" disabled={!!busy}
-              onPress={() => go('products', { productId: product.id })}>Configurar medidas</Primary> : null}
-            {confirming ? <>
-              <Info title="Este producto tiene un LED asociado">
-                <Copy>Si lo quitas solo de la repisa, la luz seguiría apuntando a un producto que ya no está aquí. Al quitar ambos se retira también del resto de luces del producto.</Copy>
-              </Info>
-              <Primary variant="danger" disabled={!!busy} loading={busy === `remove:${product.id}`}
-                onPress={() => removeProduct(product)}>Quitar repisa y asociación del LED</Primary>
-              <Primary variant="light" disabled={!!busy} onPress={() => setConfirmRemove(null)}>Cancelar</Primary>
-            </> : <Primary variant="light" disabled={!!busy}
-              onPress={() => removeProduct(product)}>Quitar de la repisa</Primary>}
-          </View> : null}
-        </View>;
-      })}
-      {!products.length ? <Info>Aún no hay productos asignados a esta repisa.</Info> : null}
+          <Text style={S.rowDetail}>{`${product.sku || ''} · ${productStatus(product)}`}</Text>
+        </View>
+        <Text style={S.rowChevron}>›</Text>
+      </Pressable>)}
+      {!products.length ? <Info>Aún no hay productos en esta repisa.</Info> : null}
       {manage ? (!showCatalog
         ? <Primary variant="light" disabled={!!busy} onPress={() => setShowCatalog(true)}>Agregar producto desde el catálogo</Primary>
         : <CatalogPicker shelfId={shelf.id} assignedIds={assignedIds} busy={!!busy}
             onAdd={addProduct} onClose={() => setShowCatalog(false)} />) : null}
 
       <SectionLabel>Luces guía</SectionLabel>
-      {lights.map(light => {
-        const current = (light.products || [])[0];
-        const editingThis = editLight?.id === light.id;
-        return <View key={light.id} style={S.block}>
+      {lights.map(light => <Pressable key={light.id} accessibilityRole="button"
+        accessibilityLabel={`Ver opciones de ${lightLabel(light)}`}
+        onPress={() => setSheet({ type: 'light', id: light.id })}
+        style={({ pressed }) => [S.row, pressed && S.pressed]}>
+        <View style={{ flex: 1 }}>
           <Text style={S.rowTitle}>{lightLabel(light)}</Text>
-          <Text style={S.rowDetail}>{current ? current.name : 'Sin producto asociado'}</Text>
-          <View style={S.actions}>
-            {manage && !editingThis ? <Primary variant="light" disabled={!!busy}
-              onPress={() => setEditLight({ id: light.id, value: light.name || '' })}>Editar nombre</Primary> : null}
-            {manage && editingThis ? <>
-              <FieldCard label="Nombre de la luz" value={editLight.value} editable={!busy}
-                onChangeText={value => setEditLight({ id: light.id, value })} />
-              <Primary disabled={!!busy} loading={busy === `light:${light.id}`}
-                onPress={() => saveLight(light)}>Guardar nombre</Primary>
-              <Primary variant="light" disabled={!!busy} onPress={() => setEditLight(null)}>Cancelar</Primary>
-            </> : null}
-            {manage && !editingThis ? <Primary variant="light" disabled={!!busy}
-              onPress={() => setPicker(picker?.lightId === light.id ? null : { lightId: light.id, replaceProductId: current?.id })}>
-              {current ? 'Cambiar producto' : 'Asignar producto'}
-            </Primary> : null}
-            {current && !editingThis ? <Primary variant="light" disabled={!!busy}
-              onPress={() => unassignLightProduct(current.id)}>Quitar asociación</Primary> : null}
-            <Primary variant="light" disabled={!!busy} loading={busy === `test:${light.id}`}
-              onPress={() => testLight(light)}>Encender 10 s</Primary>
-          </View>
-          {picker?.lightId === light.id ? <View style={S.picker}>
-            {products.filter(product => product.id !== current?.id).map(product =>
-              <Pressable key={product.id} accessibilityRole="button"
-                accessibilityLabel={`Asociar ${product.name} a ${lightLabel(light)}`} disabled={!!busy}
-                onPress={() => assignToLight(light, product.id)}
-                style={({ pressed }) => [S.row, pressed && S.pressed]}>
-                <Text style={S.rowTitle}>{product.name}</Text>
-                <Text style={S.rowDetail}>{product.sku}</Text>
-              </Pressable>)}
-            {!products.length ? <Info>Agrega el producto a la repisa antes de asociarlo a un LED.</Info> : null}
-            {products.length && products.filter(product => product.id !== current?.id).length === 0
-              ? <Info>No hay otro producto de esta repisa para asociar.</Info> : null}
-          </View> : null}
-        </View>;
-      })}
+          <Text style={S.rowDetail}>{lightDetail(light)}</Text>
+        </View>
+        <Text style={S.rowChevron}>›</Text>
+      </Pressable>)}
       {!lights.length ? <Info>Esta repisa no tiene luces guía. Se configuran desde Dispositivos → guía LED.</Info> : null}
 
       <SectionLabel>Cámara y zonas</SectionLabel>
@@ -312,6 +302,72 @@ function ShelfBody({ shelf, go, manage, onChanged }) {
         <Copy>Si la repisa tiene zonas o luces, el sistema dirá qué lo impide antes de borrarla.</Copy>
       </> : null}
     </LoadState>
+
+    <Sheet visible={!!sheetProduct} title={sheetProduct?.name || ''}
+      subtitle={sheetProduct ? `${sheetProduct.sku || ''} · ${productStatus(sheetProduct)}` : ''}
+      onClose={closeSheet}>
+      {sheetProduct ? <>
+        {linkedLight(sheetProduct.id)
+          ? <Copy>{`Está en ${lightLabel(linkedLight(sheetProduct.id))}`}</Copy> : null}
+        {manage && !sheetProduct.physicalConfigured
+          ? <Primary variant="light" onPress={() => {
+              closeSheet();
+              go('products', { productId: sheetProduct.id });
+            }}>Completar tamaño y posición</Primary> : null}
+        {manage && confirmRemove === sheetProduct.id ? <>
+          <Info title="Este producto tiene una luz asociada">
+            Si lo quitas solo de la repisa, la luz seguiría apuntando a un producto que ya no está aquí.
+          </Info>
+          <Primary variant="danger" disabled={!!busy} loading={busy === `remove:${sheetProduct.id}`}
+            onPress={() => removeProduct(sheetProduct)}>Quitar repisa y luz</Primary>
+          <Primary variant="light" disabled={!!busy} onPress={() => setConfirmRemove(null)}>Cancelar</Primary>
+        </> : manage ? <Primary variant="danger" disabled={!!busy}
+          onPress={() => removeProduct(sheetProduct)}>Quitar de la repisa</Primary> : null}
+      </> : null}
+    </Sheet>
+
+    <Sheet visible={!!sheetLight && sheet?.view !== 'products' && sheet?.view !== 'name'}
+      title={sheetLight ? lightLabel(sheetLight) : ''} subtitle={sheetLight ? lightDetail(sheetLight) : ''}
+      onClose={closeSheet}>
+      {sheetLight ? <>
+        <Primary disabled={!!busy} loading={busy === `test:${sheetLight.id}`}
+          onPress={() => testLight(sheetLight)}>Encender 10 s</Primary>
+        {manage ? <Primary variant="light" disabled={!!busy}
+          onPress={() => setSheet({ ...sheet, view: 'products' })}>
+          {sheetLightProduct ? 'Cambiar producto' : 'Asignar producto'}
+        </Primary> : null}
+        {manage && sheetLightProduct ? <Primary variant="light" disabled={!!busy}
+          onPress={() => unassignLightProduct(sheetLightProduct.id)}>Dejar sin producto</Primary> : null}
+        {manage ? <Primary variant="light" disabled={!!busy}
+          onPress={() => setSheet({ ...sheet, view: 'name', value: sheetLight.name || '' })}>Cambiar nombre</Primary> : null}
+      </> : null}
+    </Sheet>
+
+    <Sheet visible={sheet?.type === 'light' && sheet?.view === 'products'}
+      title="Elige un producto" subtitle={sheetLight ? lightLabel(sheetLight) : ''} onClose={closeSheet}>
+      {products.filter(product => product.id !== sheetLightProduct?.id).map(product =>
+        <Pressable key={product.id} accessibilityRole="button"
+          accessibilityLabel={`Asociar ${product.name}`} disabled={!!busy}
+          onPress={() => assignToLight(sheetLight, product.id)}
+          style={({ pressed }) => [S.row, pressed && S.pressed]}>
+          <View style={{ flex: 1 }}>
+            <Text style={S.rowTitle}>{product.name}</Text>
+            <Text style={S.rowDetail}>{product.sku}</Text>
+          </View>
+          <Text style={S.rowChevron}>›</Text>
+        </Pressable>)}
+      {!products.length ? <Info>Agrega el producto a la repisa antes de asignarlo a una luz.</Info> : null}
+    </Sheet>
+
+    <Sheet visible={sheet?.type === 'light' && sheet?.view === 'name'}
+      title="Nombre de la luz" onClose={closeSheet}>
+      {sheetLight ? <>
+        <FieldCard label="Nombre" value={sheet.value || ''} editable={!busy}
+          onChangeText={value => setSheet({ ...sheet, value })} />
+        <Primary disabled={!!busy || !(sheet.value || '').trim()} loading={busy === `light:${sheetLight.id}`}
+          onPress={() => saveLight(sheetLight)}>Guardar nombre</Primary>
+      </> : null}
+    </Sheet>
   </View>;
 }
 
@@ -385,8 +441,8 @@ export default function ShelvesScreen({ go, params }) {
       {!(state.data || []).length ? <Info>No hay repisas registradas. Crea la primera para empezar.</Info> : null}
     </LoadState>
 
-    <Info title="Antes de instalar hardware">
-      <Copy>Primero crea y configura el producto en Productos, luego asígnalo a una repisa. Un producto sin orientación ni medidas impide vincular la cámara. La guía LED se configura desde Dispositivos.</Copy>
+    <Info title="Antes de empezar">
+      Primero crea el producto en Productos y luego agrégalo a la repisa. La cámara solo se conecta cuando cada producto ya tiene anotados su tamaño y su posición.
     </Info>
   </Shell>;
 }
@@ -402,11 +458,14 @@ const S = StyleSheet.create({
   badge: { backgroundColor: C.blue, color: C.navy, fontSize: 12, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, overflow: 'hidden' },
   badgeMuted: { backgroundColor: C.border, color: C.muted },
   body: { gap: 12, paddingTop: 4 },
-  block: { gap: 6, paddingVertical: 4 },
   rowTitle: { color: C.text, fontSize: 15, fontWeight: '500' },
   rowDetail: { color: C.muted, fontSize: 13 },
-  actions: { gap: 8, marginTop: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
+  rowChevron: { color: C.muted, fontSize: 20 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border },
   rowAction: { color: C.navy, fontSize: 13, fontWeight: '600' },
-  picker: { gap: 4, paddingTop: 4 },
+  sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: C.field, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, gap: 12 },
+  sheetTitle: { color: C.navy, fontSize: 18, fontWeight: '700' },
+  sheetSubtitle: { color: C.muted, fontSize: 13 },
+  sheetActions: { gap: 8 },
 });

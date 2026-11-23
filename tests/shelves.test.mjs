@@ -72,6 +72,7 @@ const domProps = props => Object.fromEntries(
 );
 const rn = {
   StyleSheet: { create: styles => styles },
+  Modal: ({ children, visible }) => visible ? React.createElement('div', null, children) : null,
   Pressable: ({ children, style, ...props }) => React.createElement('div', {
     ...domProps(props), style: typeof style === 'function' ? style({ pressed: false }) : style,
   }, typeof children === 'function' ? children({ pressed: false }) : children),
@@ -97,15 +98,17 @@ test('la ruta shelves está cableada y el Panel ofrece el mosaico', () => {
   assert.ok(panel.includes("go('shelves')"));
 });
 
-test('Pantalla de estantes: alta y aviso de configuración física antes de hardware', () => {
+test('Pantalla de estantes: alta y aviso en lenguaje sencillo', () => {
   const Shelves = load('ShelvesScreen');
   const markup = renderToStaticMarkup(React.createElement(Shelves, { go: () => {} }));
   assert.ok(markup.includes('Crear repisa'));
   assert.ok(markup.includes('Repisa A'));
-  assert.ok(markup.includes('Antes de instalar hardware'));
+  assert.ok(markup.includes('Antes de empezar'));
+  assert.ok(markup.includes('tamaño y su posición'));
   const screen = source('../src/screens/devices/ShelvesScreen.js');
   assert.ok(screen.includes('physicalConfigured'));
-  assert.ok(screen.includes('sin orientación ni medidas'));
+  assert.ok(!screen.includes('Antes de instalar hardware'), 'Sin tecnicismos en el aviso');
+  assert.ok(!screen.includes('sin orientación ni medidas'));
 });
 
 test('el hub expande productos, luces y cámara sin pantalla de detalle', () => {
@@ -117,13 +120,28 @@ test('el hub expande productos, luces y cámara sin pantalla de detalle', () => 
   assert.ok(markup.includes('Productos previstos'));
   assert.ok(markup.includes('Leche'));
   assert.ok(markup.includes('LED 1 · Luz 1'));
-  assert.ok(markup.includes('Asociado a LED 1'));
   assert.ok(markup.includes('Vincular cámara'));
   assert.ok(markup.includes('Editar nombre y ubicación'));
   assert.ok(!markup.includes('Seleccionar estante'), 'El hub no vuelve a pedir estante');
   const screen = source('../src/screens/devices/ShelvesScreen.js');
   assert.ok(screen.includes('withLight: !!light'), 'Quitar con LED requiere confirmación explícita');
   assert.ok(screen.includes('Inactivo'), 'Los productos inactivos se muestran, no se ocultan');
+});
+
+test('productos y luces son filas simples; las acciones aparecen al tocar', () => {
+  const Shelves = load('ShelvesScreen');
+  const markup = renderToStaticMarkup(React.createElement(Shelves, { go: () => {}, params: { shelfId: 's1' } }));
+  assert.ok(markup.includes('Falta medir'), 'Dato corto del producto en la fila');
+  assert.ok(markup.includes('Leche'), 'Dato corto de la luz en la fila');
+  assert.ok(!markup.includes('Encender 10 s'), 'La prueba de luz no está en la fila');
+  assert.ok(!markup.includes('Cambiar nombre'), 'La edición no está en la fila');
+  assert.ok(!markup.includes('Quitar de la repisa'), 'La baja no está en la fila');
+  const screen = source('../src/screens/devices/ShelvesScreen.js');
+  assert.ok(screen.includes("setSheet({ type: 'product'"));
+  assert.ok(screen.includes("setSheet({ type: 'light'"));
+  assert.ok(screen.includes("view: 'products'"));
+  assert.ok(screen.includes("view: 'name'"));
+  assert.ok(screen.includes('import { Modal'), 'Las acciones viven en un panel emergente');
 });
 
 test('La cámara exige configuración física y permite ligar una repisa existente', () => {
