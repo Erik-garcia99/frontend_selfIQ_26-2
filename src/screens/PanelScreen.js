@@ -20,7 +20,7 @@ export default function PanelScreen({ go }) {
   const { user } = useAuth();
   const d = useDevices();
   const access = visiblePanelSections(user);
-  const hasAdminTools = access.operations || access.approve || access.tokens || access.logs || access.branch;
+  const hasAdminTools = access.operations || access.approve || access.tokens || access.logs || access.people || access.branch;
   return <View style={styles.appPage}>
     <ScrollView contentContainerStyle={styles.panelContent}>
       <View style={styles.homeHeader}>
@@ -43,9 +43,10 @@ export default function PanelScreen({ go }) {
         </View>
       </> : null}
 
-      {access.approve || access.tokens || access.logs || access.branch ? <>
+      {access.approve || access.tokens || access.logs || access.people || access.branch ? <>
         <Text style={styles.homeSectionLabel}>Personal y registro</Text>
         <View style={styles.panelGrid}>
+          {access.people ? <PanelTile title="Personas" detail="Empleados, clientes y proveedores." icon={navIcons.panel} onPress={() => go('people')} /> : null}
           {access.approve ? <PanelTile title="Aprobar usuarios" detail="Revisa cuentas pendientes." icon={navIcons.panel} onPress={() => go('approve')} /> : null}
           {access.tokens ? <PanelTile title="Tokens" detail="Administra accesos de registro." icon={navIcons.settings} onPress={() => go('tokens')} /> : null}
           {access.logs ? <PanelTile title="Bitácora" detail="Consulta y descarga lo ocurrido en la sucursal." icon={navIcons.panel} onPress={() => go('logs')} /> : null}
