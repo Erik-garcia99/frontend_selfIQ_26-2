@@ -106,6 +106,7 @@ test('la matriz oculta aprobar usuarios a gerencia, pero conserva dispositivos',
   const gerencia = { role: 'gerencia' };
   assert.equal(canManage(gerencia), true);
   assert.equal(canApprove(gerencia), false, 'gerencia no aprueba cuentas (owner/rh/sudo)');
+  assert.equal(canApprove({ role: 'manager' }), false, 'el gerente crea, pero no aprueba');
   const deviceRoutes = new Set(['devices', 'products', 'approve', 'tokens', 'branch', 'test-product-light']);
   assert.equal(canOpenStaffRoute('approve', gerencia, deviceRoutes), false);
   assert.equal(canOpenStaffRoute('tokens', gerencia, deviceRoutes), true);

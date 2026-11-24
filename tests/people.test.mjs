@@ -80,6 +80,8 @@ test('la pantalla de Personas respeta textos simples y baja lógica', () => {
   }
   assert.ok(!screen.includes("['staff',"), 'staff era un alias histórico, no se ofrece al dar de alta');
   assert.ok(screen.includes('role: value'), 'La etiqueta es española; el valor va sin traducir al backend');
+  assert.ok(screen.includes("['manager', 'gerencia']"), 'Gerente/gerencia crean cuentas pendientes');
+  assert.ok(screen.includes('pendiente de aprobación de owner o RRHH'));
 });
 
 test('Personas está en Panel y oculto para quien no administra', () => {

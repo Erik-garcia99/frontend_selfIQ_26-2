@@ -34,6 +34,8 @@ const ROLE_OPTIONS = [
 ];
 
 const fullName = (item) => `${item.firstName || ''} ${item.lastName || ''}`.trim() || item.email;
+// Gerente y gerencia crean, pero no aprueban: su alta queda pendiente.
+const createsPending = (user) => ['manager', 'gerencia'].includes(user?.role?.toLowerCase());
 const money = (value) => `$${Number(value || 0).toFixed(2)}`;
 const dateLabel = (value) => {
   if (!value) return '—';
@@ -60,7 +62,7 @@ const styles = StyleSheet.create({
 });
 
 export default function PeopleScreen({ go }) {
-  const { accessToken } = useAuth();
+  const { user, accessToken } = useAuth();
   const d = useDevices();
   const branchId = d.branchId;
   const [section, setSection] = useState('employees');
@@ -292,6 +294,9 @@ export default function PeopleScreen({ go }) {
                   <Text style={[styles.roleText, form.role === value && styles.roleTextOn]}>{label}</Text>
                 </Pressable>)}
               </View>
+              {!editing && createsPending(user) ? <Text style={styles.muted}>
+                Al guardar, la cuenta quedará pendiente de aprobación de owner o RRHH.
+              </Text> : null}
             </> : null}
             {!editing ? <Field label="Contraseña inicial" value={form.password} onChangeText={change('password')} password /> : null}
           </>}
