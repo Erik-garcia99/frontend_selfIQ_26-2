@@ -33,7 +33,7 @@ test('peopleService reutiliza el cliente HTTP y cubre F-02', () => {
   const service = source('../src/services/peopleService.js');
   assert.ok(service.includes("from './http.js'"), 'No crea otro cliente HTTP');
   assert.ok(service.includes('apiRequest'));
-  for (const endpoint of ['/employees', '/customers', '/suppliers', '/purchases', '/products']) {
+  for (const endpoint of ['/employees', '/customers', '/suppliers', '/purchases', '/products', '/pos/sellers']) {
     assert.ok(service.includes(endpoint), `Falta ${endpoint}`);
   }
   assert.ok(service.includes('method: \'PATCH\''));
@@ -60,6 +60,19 @@ test('las rutas usan la sucursal activa y codifican identificadores', async () =
   assert.equal(calls[4].path, '/branches/b1/customers/u1/purchases');
 });
 
+test('el permiso de vender del POS usa el prefijo /api/v1', async () => {
+  const { service, calls } = loadService();
+  await service.listSellers({ branchId: 'b1', accessToken: 't' });
+  assert.equal(calls[0].path, '/api/v1/branches/b1/pos/sellers');
+  await service.grantSeller({ branchId: 'b1', userId: 'u/1', accessToken: 't' });
+  assert.equal(calls[1].path, '/api/v1/branches/b1/pos/sellers');
+  assert.equal(calls[1].options.method, 'POST');
+  assert.deepEqual(calls[1].options.body, { user_id: 'u/1' });
+  await service.revokeSeller({ branchId: 'b1', userId: 'u/1', accessToken: 't' });
+  assert.equal(calls[2].path, '/api/v1/branches/b1/pos/sellers/u%2F1');
+  assert.equal(calls[2].options.method, 'DELETE');
+});
+
 test('la pantalla de Personas respeta textos simples y baja lógica', () => {
   const screen = source('../src/screens/admin/PeopleScreen.js');
   for (const label of ['Empleados', 'Clientes', 'Proveedores', 'Nuevo',
@@ -73,6 +86,11 @@ test('la pantalla de Personas respeta textos simples y baja lógica', () => {
   assert.ok(screen.includes('includeInactive'), 'Los dados de baja se pueden consultar');
   assert.ok(screen.includes('deviceAdapter.listProducts'), 'Catálogo para asociar proveedor→producto');
   assert.ok(screen.includes('peopleService.customerPurchases'), 'Historial de compras del POS');
+  assert.ok(screen.includes('peopleService.listSellers'), 'Estado del permiso de vender');
+  assert.ok(screen.includes('peopleService.grantSeller'), 'Otorgar permiso de vender');
+  assert.ok(screen.includes('peopleService.revokeSeller'), 'Revocar permiso de vender');
+  assert.ok(screen.includes('canApprove(user)'), 'Solo owner/RRHH/sudo administran el permiso');
+  assert.ok(screen.includes('Permiso para vender en el POS'));
   assert.ok(!screen.includes('robo') && !screen.includes('merma'), 'Sin etiquetas automáticas');
   assert.ok(!screen.includes('Rol (employee o staff)'), 'El rol ya no se escribe a mano');
   for (const value of ['manager', 'rh', 'gerencia', 'employee']) {

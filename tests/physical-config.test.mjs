@@ -122,9 +122,8 @@ const { default: Form, SpecForm, RoiForm } = loadSource(fileURLToPath(
   new URL('../src/screens/devices/PhysicalConfigForm.js', import.meta.url)));
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
 
-test('formulario declara alcance cloud sin pedir cámara ni referencia', () => {
+test('formulario no afirma aplicación en cámara ni pide referencia', () => {
   const html = render(Form, { branchId: 'branch', product: { id: productId, name: 'Producto' } });
-  assert.ok(html.includes('Solo configuración del sistema'));
   assert.ok(html.includes('Cargando configuración'));
   assert.equal(html.includes('Aplicado en la cámara'), false);
 });

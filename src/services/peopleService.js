@@ -56,4 +56,26 @@ export const peopleService = {
       method: 'PUT', accessToken, body: { products },
     });
   },
+
+  // POS: permiso de vender por persona. Estas rutas sí llevan /api/v1 (el
+  // `root()` de arriba es para las rutas antiguas de F-02).
+  listSellers({ branchId, accessToken }) {
+    return apiRequest(`/api/v1/branches/${id(branchId)}/pos/sellers`, { accessToken })
+      .then((rows) => (Array.isArray(rows) ? rows : rows?.items || []).map((row) => ({
+        userId: row.user_id ?? row.userId,
+        canSell: Boolean(row.can_sell ?? row.canSell),
+        grantedBy: row.granted_by ?? row.grantedBy ?? null,
+        grantedAt: row.granted_at ?? row.grantedAt ?? null,
+      })));
+  },
+  grantSeller({ branchId, userId, accessToken }) {
+    return apiRequest(`/api/v1/branches/${id(branchId)}/pos/sellers`, {
+      method: 'POST', accessToken, body: { user_id: userId },
+    });
+  },
+  revokeSeller({ branchId, userId, accessToken }) {
+    return apiRequest(`/api/v1/branches/${id(branchId)}/pos/sellers/${id(userId)}`, {
+      method: 'DELETE', accessToken,
+    });
+  },
 };

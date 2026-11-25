@@ -50,10 +50,6 @@ function Workspace({ branchId, accessToken, product, onClose }) {
 
   return <>
     <SectionLabel>Configuración física · {product.name}</SectionLabel>
-    <Info title="Solo configuración del sistema">
-      No aplica cambios al motor ni modifica geometría, calibración o referencias de la cámara.
-      Las medidas pertenecen al producto y se comparten en toda la organización.
-    </Info>
     {error ? <Card title="No se pudo completar" tone="warning"><Copy>{error}</Copy></Card> : null}
     {notice ? <Info title="Configuración guardada">{notice}</Info> : null}
     {!data && !error ? <Info>Cargando configuración…</Info> : null}

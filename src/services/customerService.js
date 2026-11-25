@@ -15,6 +15,14 @@ export function getCustomerBranches(accessToken, { page = 1, pageSize = 5, q = '
 /**
  * Consulta el estado y aforo en tiempo real de la sucursal seleccionada.
  */
+/** Historial de compras del cliente (vinculadas por teléfono o customer_id). */
+export function getCustomerPurchases(accessToken, { page = 1, pageSize = 5 } = {}) {
+  const params = new URLSearchParams();
+  if (page) params.set('page', String(page));
+  if (pageSize) params.set('page_size', String(pageSize));
+  return apiRequest(`/customer/purchases?${params}`, { accessToken });
+}
+
 export async function getCustomerHome(accessToken, branchId) {
   if (!branchId) throw new Error('Se requiere un identificador de sucursal.');
   return apiRequest(`/customer/home?branch_id=${encodeURIComponent(branchId)}`, { accessToken });

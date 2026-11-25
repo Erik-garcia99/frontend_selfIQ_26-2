@@ -8,7 +8,7 @@ import { peopleService } from '../../services/peopleService';
 import { deviceAdapter } from '../../services/deviceAdapter';
 import { useAsyncAction } from '../../utils/useAsyncAction';
 import { describeError } from '../../utils/errorMessages';
-import { isEmail } from '../../utils/validation';
+import { canApprove, isEmail } from '../../utils/validation';
 import { colors as C } from '../../theme/colors';
 
 const SECTIONS = [
@@ -59,6 +59,8 @@ const styles = StyleSheet.create({
   roleOn: { backgroundColor: C.navy, borderColor: C.navy },
   roleText: { color: C.text, fontWeight: '600' },
   roleTextOn: { color: C.white },
+  sellerBox: { borderWidth: 1, borderColor: C.border, borderRadius: 12, padding: 12, marginTop: 8, marginBottom: 4 },
+  permissionTitle: { color: C.navy, fontWeight: '700', marginBottom: 4 },
 });
 
 export default function PeopleScreen({ go }) {
@@ -79,6 +81,7 @@ export default function PeopleScreen({ go }) {
   const [purchases, setPurchases] = useState([]);
   const [links, setLinks] = useState([]);
   const [feedback, setFeedback] = useState(null);
+  const [seller, setSeller] = useState(null); // permiso de vender del empleado editado
   const task = useAsyncAction();
 
   const load = useCallback(async () => {
@@ -111,10 +114,27 @@ export default function PeopleScreen({ go }) {
   const refresh = () => setReload((value) => value + 1);
   const close = () => {
     setModal(null); setEditing(null); setForm(EMPTY_FORM);
-    setConfirming(false); setFormError(''); task.setError('');
+    setConfirming(false); setFormError(''); task.setError(''); setSeller(null);
   };
 
-  function openForm(item = null) {
+  async function loadSeller(item) {
+    setSeller(null);
+    if (!item?.id || section !== 'employees' || !item.active || !canApprove(user)) return;
+    try {
+      const rows = await peopleService.listSellers({ branchId, accessToken });
+      const found = rows.find((row) => row.userId === item.id) || null;
+      setSeller({
+        userId: item.id,
+        canSell: Boolean(found?.canSell),
+        grantedBy: found?.grantedBy || null,
+        grantedAt: found?.grantedAt || null,
+      });
+    } catch {
+      setSeller({ userId: item.id, canSell: false, grantedBy: null, grantedAt: null });
+    }
+  }
+
+  async function openForm(item = null) {
     setEditing(item);
     setConfirming(false); setFormError(''); task.setError('');
     if (section === 'suppliers') {
@@ -126,6 +146,7 @@ export default function PeopleScreen({ go }) {
         role: item?.role || 'employee' });
     }
     setModal('form');
+    await loadSeller(item);
   }
 
   async function save() {
@@ -189,6 +210,31 @@ export default function PeopleScreen({ go }) {
     setFeedback({ variant: 'success', title: 'Registro dado de baja',
       message: 'El registro se conserva en el historial y ya no aparece en la lista activa.',
       actionLabel: 'Entendido', onClose: () => setFeedback(null) });
+  }
+
+  async function setSellerPermission(allow) {
+    if (!editing?.id || !branchId) return;
+    const result = await task.run(() => allow
+      ? peopleService.grantSeller({ branchId, accessToken, userId: editing.id })
+      : peopleService.revokeSeller({ branchId, accessToken, userId: editing.id }));
+    if (!result) {
+      const info = describeError(task.getFailure());
+      task.setError('');
+      return setFeedback({ variant: 'error', ...info, actionLabel: 'Entendido', onClose: () => setFeedback(null) });
+    }
+    setSeller({
+      userId: editing.id, canSell: allow,
+      grantedBy: allow ? user?.id : null,
+      grantedAt: allow ? new Date().toISOString() : null,
+    });
+    setFeedback({
+      variant: 'success',
+      title: allow ? 'Permiso otorgado' : 'Permiso retirado',
+      message: allow
+        ? `${fullName(editing)} ya puede vender en el POS.`
+        : `${fullName(editing)} ya no podrá vender en el POS.`,
+      actionLabel: 'Entendido', onClose: () => setFeedback(null),
+    });
   }
 
   async function openPurchases(item) {
@@ -300,6 +346,20 @@ export default function PeopleScreen({ go }) {
             </> : null}
             {!editing ? <Field label="Contraseña inicial" value={form.password} onChangeText={change('password')} password /> : null}
           </>}
+          {section === 'employees' && editing?.active && canApprove(user) ? <View style={styles.sellerBox}>
+            <Text style={styles.permissionTitle}>Permiso para vender en el POS</Text>
+            <Text style={styles.muted}>
+              {seller?.canSell
+                ? 'Autorizado. Puede vender cuando desbloquee la caja con su contraseña.'
+                : 'Sin autorización. Podrá consultar, pero no vender.'}
+            </Text>
+            {seller?.canSell ? <Button dark={false} loading={task.loading} onPress={() => setSellerPermission(false)}>
+              Quitar permiso de vender
+            </Button> : <Button dark={false} loading={task.loading} onPress={() => setSellerPermission(true)}>
+              Autorizar para vender
+            </Button>}
+            {seller?.grantedAt ? <Text style={styles.muted}>Otorgado el {dateLabel(seller.grantedAt)}</Text> : null}
+          </View> : null}
           <Message error={task.error || formError} />
           {editing && !editing.active ? <Text style={{ marginBottom: 12 }}>Este registro está dado de baja. Solo puedes consultarlo.</Text> : null}
           <Button loading={task.loading} disabled={Boolean(editing && !editing.active)} onPress={save}>Guardar</Button>
