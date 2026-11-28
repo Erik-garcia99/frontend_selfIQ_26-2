@@ -33,6 +33,7 @@ export default function PanelScreen({ go }) {
         <PanelTile title="Control de LED" detail="Productos asociados · ON / OFF" icon={frameIcons.shelves}
           onPress={() => { d.setDraft({ controlBack: 'panel' }); go('test-product-light'); }} />
         <PanelTile title="Estantes" detail="Productos, luces y cámara de cada repisa." icon={frameIcons.shelves} onPress={() => go('shelves')} />
+        {access.mapDraft ? <PanelTile title="Mapa del local" detail="Prepara y guarda el área del croquis." icon={frameIcons.shelves} onPress={() => go('map-draft')} /> : null}
       </View>
 
       {access.operations ? <>

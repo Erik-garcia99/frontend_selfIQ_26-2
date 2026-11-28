@@ -29,8 +29,8 @@ export function ClientBottomNav({ go, active }) {
     </Pressable>)}</View>;
 }
 
-export function Screen({ children, go, active, nav: Nav = BottomNav }) {
-  return <View style={L.screen}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={L.scroll}>{children}</ScrollView>
+export function Screen({ children, go, active, nav: Nav = BottomNav, scrollEnabled = true }) {
+  return <View style={L.screen}><ScrollView scrollEnabled={scrollEnabled} keyboardShouldPersistTaps="handled" contentContainerStyle={L.scroll}>{children}</ScrollView>
     {go && Nav ? <Nav go={go} active={active} /> : null}</View>;
 }
 

@@ -123,7 +123,7 @@ test('empleado sin permisos no ve herramientas administrativas', () => {
   const employee = { role: 'employee' };
   const sections = visiblePanelSections(employee);
   assert.deepEqual(sections, { operations: false, approve: false, tokens: false, logs: false,
-    people: false, branch: false });
+    people: false, branch: false, mapDraft: false });
   const deviceRoutes = new Set(['devices', 'products', 'approve', 'tokens', 'branch']);
   assert.equal(canOpenStaffRoute('devices', employee, deviceRoutes), false);
   assert.equal(canOpenStaffRoute('shelves', employee, deviceRoutes), true, 'el hub de repisas es lectura para empleados');
